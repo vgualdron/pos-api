@@ -21,10 +21,22 @@ jobs:
           dangerous-clean-slate: false
           log-level: verbose
           protocol: ftps
+          security: loose
           timeout: 180001
           local-dir: ./
           exclude: |
             **/vendor/**
+            **/node_modules/**
+            **/tests/**
+            **/docs/**
             **/.env*
             **/.git*
             **/.git*/**
+            **/.github/**
+            **/storage/logs/**
+            **/storage/framework/cache/**
+            **/storage/framework/sessions/**
+            **/storage/framework/views/**
+            phpunit.xml
+            phpunit.xml.dist
+            favicon.ico
