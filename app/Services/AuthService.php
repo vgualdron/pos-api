@@ -1,8 +1,8 @@
 <?php
 namespace App\Services;
 
+use App\Models\Station;
 use App\Repositories\UserRepository;
-use App\Services\TurnOperationService;
 use Illuminate\Support\Facades\Artisan;
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
@@ -10,12 +10,10 @@ use Illuminate\Support\Facades\Hash;
 class AuthService
 {
     protected UserRepository $userRepository;
-    protected TurnOperationService $turnOperationService;
 
-    public function __construct(UserRepository $userRepository, TurnOperationService $turnOperationService)
+    public function __construct(UserRepository $userRepository)
     {
         $this->userRepository = $userRepository;
-        $this->turnOperationService = $turnOperationService;
     }
 
     public function login(string $email, string $password): array
@@ -31,7 +29,7 @@ class AuthService
             throw new \Exception('Credenciales incorrectas');
         }
 
-        $user->load(['company', 'place', 'station.services', 'station.place']);
+        $user->load(['company', 'place', 'station.place']);
 
         if ($user->status !== 'activo') {
             throw new \Exception('Usuario inactivo o suspendido');
@@ -72,7 +70,7 @@ class AuthService
                     ->values(); // convertir a colección indexada
 
 
-        $stationContext = $this->turnOperationService->buildStationContext($user->station);
+        $stationContext = $this->buildStationContext($user->station);
 
         return [
             'user' => $user,
@@ -81,18 +79,15 @@ class AuthService
             'roles' => $user->getRoleNames(),
             'grouped' => $grouped,
             'station' => $stationContext['station'],
-            'services_to_generate' => $stationContext['services_to_generate'],
-            'services_to_call' => $stationContext['services_to_call'],
-            'services_to_display' => $stationContext['services_to_display'],
             'ui_mode' => $stationContext['ui_mode'],
         ];
     }
 
     public function context(User $user): array
     {
-        $user->load(['company', 'place', 'station.services', 'station.place']);
+        $user->load(['company', 'place', 'station.place']);
 
-        return $this->turnOperationService->buildStationContext($user->station);
+        return $this->buildStationContext($user->station);
     }
 
     public function logout(User $user): void
@@ -108,5 +103,20 @@ class AuthService
 
         $user->password = bcrypt($newPassword);
         $user->save();
+    }
+
+    protected function buildStationContext(?Station $station): array
+    {
+        if (!$station) {
+            return [
+                'station' => null,
+                'ui_mode' => null,
+            ];
+        }
+
+        return [
+            'station' => $station,
+            'ui_mode' => $station->type === Station::TYPE_REGISTER ? 'register' : null,
+        ];
     }
 }

@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Models\File;
-use App\Support\PlaceScope;
 use Exception;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Response;
@@ -24,10 +23,6 @@ class FileController extends Controller
             $name = $request->name;
             $modelName = $request->modelName;
             $modelId = $request->modelId;
-
-            if ($name === 'DISPLAY_VIDEO' && in_array($modelName, ['stations', 'Station'], true)) {
-                PlaceScope::assertStation($userSesion, (int) $modelId, 'display_videos.allPlaces');
-            }
 
             $type = $request->type;
             $extension = $request->extension;

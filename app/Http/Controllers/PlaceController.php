@@ -13,7 +13,7 @@ use Illuminate\Http\JsonResponse;
 class PlaceController extends Controller
 {
     protected $service;
-    protected array $fields = ['company_id', 'name', 'address', 'phone', 'email', 'print_api_url', 'status'];
+    protected array $fields = ['company_id', 'name', 'address', 'phone', 'email', 'status'];
 
     public function __construct(PlaceService $service)
     {

@@ -46,10 +46,8 @@ class RouteServiceProvider extends ServiceProvider
     protected function configureRateLimiting()
     {
         RateLimiter::for('api', function (Request $request) {
-            // Turnos: TV + consultorio hacen muchas peticiones (colas, display, auth WS, TTS).
-            // Autenticados: tope alto por usuario. Sin sesión: más estricto por IP.
             return $request->user()
-                ? Limit::perMinute(300)->by('user:'.$request->user()->id)
+                ? Limit::perMinute(120)->by('user:'.$request->user()->id)
                 : Limit::perMinute(60)->by('ip:'.$request->ip());
         });
     }

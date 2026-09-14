@@ -46,7 +46,7 @@ class StationService
                 $station = $this->repo->create($this->normalizeStationPayload($data));
                 $this->provisionStationUser($station);
 
-                return $station->fresh(['place', 'services', 'users']);
+                return $station->fresh(['place', 'users']);
             });
         } catch (Exception $e) {
             throw new Exception('Error al crear la estación: ' . $e->getMessage());
@@ -60,7 +60,7 @@ class StationService
                 $station = $this->repo->update($id, $this->normalizeStationPayload($data));
                 $this->syncStationUser($station);
 
-                return $station->fresh(['place', 'services', 'users']);
+                return $station->fresh(['place', 'users']);
             });
         } catch (Exception $e) {
             throw new Exception("Error al actualizar la estación con ID {$id}: " . $e->getMessage());
@@ -102,34 +102,9 @@ class StationService
         }
     }
 
-    public function syncServices($id, array $services)
-    {
-        try {
-            return $this->repo->syncServices($id, $services);
-        } catch (Exception $e) {
-            throw new Exception("Error al sincronizar servicios de la estación {$id}: " . $e->getMessage());
-        }
-    }
-
     protected function normalizeStationPayload(array $data): array
     {
-        $canCall = !empty($data['can_call_tickets']);
-        $type = $data['type'] ?? null;
-
-        if ($type === Station::TYPE_DISPLAY || !$canCall) {
-            $data['max_open_turns'] = 1;
-        } else {
-            $data['max_open_turns'] = max(1, min(50, (int) ($data['max_open_turns'] ?? 1)));
-        }
-
-        $issuesSuper = !empty($data['issues_super_priority']);
-        if ($type !== Station::TYPE_KIOSK || empty($data['can_generate_tickets'])) {
-            $issuesSuper = false;
-        }
-        $data['issues_super_priority'] = $issuesSuper;
-        if ($issuesSuper) {
-            $data['show_priority_option'] = false;
-        }
+        $data['type'] = Station::TYPE_REGISTER;
 
         return $data;
     }
@@ -159,7 +134,7 @@ class StationService
             'status' => 'activo',
             'email' => $email,
             'password' => $plainPassword,
-            'roles' => [$this->roleForStationType($station->type)],
+            'roles' => ['CAJA'],
         ]);
 
         $station->login_password = $plainPassword;
@@ -198,7 +173,7 @@ class StationService
             'station_id' => $station->id,
             'status' => $station->status === 'activo' ? 'activo' : 'inactivo',
             'email' => $email,
-            'roles' => [$this->roleForStationType($station->type)],
+            'roles' => ['CAJA'],
         ]);
     }
 
@@ -271,15 +246,5 @@ class StationService
     protected function generateStationPassword(): string
     {
         return '123456789';
-    }
-
-    protected function roleForStationType(?string $type): string
-    {
-        return match ($type) {
-            Station::TYPE_REGISTER => 'CAJA',
-            Station::TYPE_CONSULTORY => 'CONSULTORY',
-            Station::TYPE_DISPLAY => 'DISPLAY',
-            default => 'KIOSK',
-        };
     }
 }

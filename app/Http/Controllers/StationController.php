@@ -17,12 +17,6 @@ class StationController extends Controller
         'name',
         'code',
         'type',
-        'can_generate_tickets',
-        'can_call_tickets',
-        'max_open_turns',
-        'show_priority_option',
-        'issues_super_priority',
-        'printer_ip',
         'status',
     ];
 
@@ -111,8 +105,6 @@ class StationController extends Controller
                 $request->user(),
                 (int) $placeId,
                 'stations.allPlaces',
-                'display_videos.allPlaces',
-                'turns.allPlaces',
                 'users.create',
                 'users.edit'
             );
@@ -120,27 +112,6 @@ class StationController extends Controller
             return response()->json($this->service->findByPlace($placeId));
         } catch (Exception $e) {
             return response()->json(['error' => 'Error al obtener estaciones por sede', 'message' => $e->getMessage()], 400);
-        }
-    }
-
-    public function syncServices(Request $request, $id): JsonResponse
-    {
-        try {
-            PlaceScope::assertStation($request->user(), (int) $id, 'stations.allPlaces');
-            $request->validate([
-                'services' => 'required|array',
-                'services.*.service_id' => 'required|integer|exists:services,id',
-                'services.*.can_generate' => 'boolean',
-                'services.*.can_call' => 'boolean',
-                'services.*.can_display' => 'boolean',
-                'services.*.display_order' => 'integer',
-            ]);
-
-            $record = $this->service->syncServices($id, $request->input('services'));
-
-            return response()->json(['message' => 'Servicios de estación actualizados con éxito', 'data' => $record], 200);
-        } catch (Exception $e) {
-            return response()->json(['error' => "Error al sincronizar servicios de la estación $id", 'message' => $e->getMessage()], 400);
         }
     }
 }

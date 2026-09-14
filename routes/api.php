@@ -9,11 +9,7 @@ use App\Http\Controllers\PermissionController;
 use App\Http\Controllers\PlaceController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\RoleController;
-use App\Http\Controllers\ServiceController;
 use App\Http\Controllers\StationController;
-use App\Http\Controllers\TurnController;
-use App\Http\Controllers\TurnPriorityPreloadController;
-use App\Http\Controllers\DisplayAlertController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\FileController;
 use App\Http\Controllers\ProductController;
@@ -25,9 +21,6 @@ Route::get('/health', function (Request $request) {
     return 'Health ... active';
 });
 
-Route::get('/public/turns/track/{qrToken}', [TurnController::class, 'trackPublic']);
-Route::post('/public/turns/track/{qrToken}/rate', [TurnController::class, 'ratePublic']);
-
 // Rutas publicas
 Route::post('auth/login', [AuthController::class, 'login']);
 
@@ -38,63 +31,14 @@ Route::group(['middleware' => ['auth:api'], 'prefix' => '/auth'], function () {
     Route::post('/change-password', [AuthController::class, 'changePassword']);
 });
 
-Route::group(['middleware' => ['auth:api'], 'prefix' => '/services'], function () {
-    Route::get('/', [ServiceController::class, 'index']);
-    Route::get('status/{status}', [ServiceController::class, 'byStatus']);
-    Route::get('place/{place}', [ServiceController::class, 'byPlace']);
-    Route::get('{id}', [ServiceController::class, 'show']);
-    Route::post('/', [ServiceController::class, 'store']);
-    Route::put('{id}', [ServiceController::class, 'update']);
-    Route::delete('{id}', [ServiceController::class, 'destroy']);
-});
-
 Route::group(['middleware' => ['auth:api'], 'prefix' => '/stations'], function () {
     Route::get('/', [StationController::class, 'index']);
     Route::get('status/{status}', [StationController::class, 'byStatus']);
     Route::get('place/{place}', [StationController::class, 'byPlace']);
-    Route::put('{id}/services', [StationController::class, 'syncServices']);
     Route::get('{id}', [StationController::class, 'show']);
     Route::post('/', [StationController::class, 'store']);
     Route::put('{id}', [StationController::class, 'update']);
     Route::delete('{id}', [StationController::class, 'destroy']);
-});
-
-Route::group(['middleware' => ['auth:api'], 'prefix' => '/turns'], function () {
-    Route::get('/queue', [TurnController::class, 'queue']);
-    Route::get('/current', [TurnController::class, 'current']);
-    Route::get('/display', [TurnController::class, 'display']);
-    Route::get('/no-shows', [TurnController::class, 'noShowsToday']);
-    Route::get('/tts', [TurnController::class, 'tts']);
-    Route::get('/history', [TurnController::class, 'history']);
-    Route::get('/today', [TurnController::class, 'today']);
-    Route::get('/patient-lookup', [TurnController::class, 'lookupPatient']);
-    Route::post('/call-next', [TurnController::class, 'callNext']);
-    Route::post('/call-by-number', [TurnController::class, 'callByNumber']);
-    Route::post('/', [TurnController::class, 'store']);
-    Route::post('{id}/recall', [TurnController::class, 'recall']);
-    Route::post('{id}/start', [TurnController::class, 'start']);
-    Route::post('{id}/complete', [TurnController::class, 'complete']);
-    Route::post('{id}/no-show', [TurnController::class, 'noShow']);
-    Route::post('{id}/cancel', [TurnController::class, 'cancel']);
-    Route::get('{id}', [TurnController::class, 'show']);
-});
-
-Route::group(['middleware' => ['auth:api'], 'prefix' => '/turn-priority-preloads'], function () {
-    Route::get('/', [TurnPriorityPreloadController::class, 'index']);
-    Route::get('/lookup', [TurnPriorityPreloadController::class, 'lookup']);
-    Route::post('/bulk', [TurnPriorityPreloadController::class, 'bulk']);
-    Route::post('/', [TurnPriorityPreloadController::class, 'store']);
-    Route::put('{id}', [TurnPriorityPreloadController::class, 'update']);
-    Route::delete('{id}', [TurnPriorityPreloadController::class, 'destroy']);
-});
-
-Route::group(['middleware' => ['auth:api'], 'prefix' => '/display-alerts'], function () {
-    Route::get('/', [DisplayAlertController::class, 'index']);
-    Route::get('/targets', [DisplayAlertController::class, 'targets']);
-    Route::post('/', [DisplayAlertController::class, 'store']);
-    Route::post('{id}/play', [DisplayAlertController::class, 'play']);
-    Route::put('{id}', [DisplayAlertController::class, 'update']);
-    Route::delete('{id}', [DisplayAlertController::class, 'destroy']);
 });
 
 Route::group(['middleware' => ['auth:api'], 'prefix' => '/companies'], function () {
