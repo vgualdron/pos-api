@@ -28,7 +28,16 @@ class SaleController extends Controller
         try {
             PlaceScope::assert($request->user(), (int) $place, 'sales.allPlaces');
 
-            return response()->json($this->service->recentForPlace((int) $place));
+            $data = $request->validate([
+                'date_from' => 'nullable|date_format:Y-m-d',
+                'date_to' => 'nullable|date_format:Y-m-d',
+            ]);
+
+            return response()->json($this->service->recentForPlace(
+                (int) $place,
+                $data['date_from'] ?? null,
+                $data['date_to'] ?? null
+            ));
         } catch (Exception $e) {
             return response()->json(['error' => 'Error al listar ventas', 'message' => $e->getMessage()], 400);
         }

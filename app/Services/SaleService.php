@@ -20,13 +20,27 @@ class SaleService
         return app(ProductService::class)->catalog((int) $station->place_id);
     }
 
-    public function recentForPlace(int $placeId)
+    public function recentForPlace(int $placeId, ?string $dateFrom = null, ?string $dateTo = null)
     {
+        $from = $dateFrom
+            ? Carbon::parse($dateFrom)->startOfDay()
+            : Carbon::today()->startOfDay();
+        $to = $dateTo
+            ? Carbon::parse($dateTo)->endOfDay()
+            : ($dateFrom
+                ? Carbon::parse($dateFrom)->endOfDay()
+                : Carbon::today()->endOfDay());
+
+        if ($to->lt($from)) {
+            [$from, $to] = [$to->copy()->startOfDay(), $from->copy()->endOfDay()];
+        }
+
         return Sale::with(['lines.lots', 'station'])
             ->where('place_id', $placeId)
+            ->whereBetween('sold_at', [$from, $to])
             ->orderByDesc('sold_at')
             ->orderByDesc('id')
-            ->limit(100)
+            ->limit(1000)
             ->get();
     }
 
