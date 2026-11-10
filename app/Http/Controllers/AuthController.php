@@ -15,10 +15,15 @@ class AuthController extends Controller
 
     public function login(Request $request)
     {
-        $request->validate([
-            'email' => 'required|email',
-            'password' => 'required|string',
-        ]);
+        $request->validate(
+            [
+                'email' => ['required', 'string', 'max:255', 'regex:/^[\p{L}0-9._%+\-]+@[\p{L}0-9.\-]+\.[\p{L}0-9\-]+$/u'],
+                'password' => 'required|string',
+            ],
+            [
+                'email.regex' => 'El correo electrónico no tiene un formato válido.',
+            ]
+        );
 
         try {
             return response()->json(

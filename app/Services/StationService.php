@@ -200,9 +200,12 @@ class StationService
 
     protected function buildStationEmailLocal(string $name): string
     {
-        $local = Str::lower(Str::ascii($name));
+        $placeholder = '__enye__';
+        $protected = preg_replace('/[ñÑ]/u', $placeholder, $name);
+        $local = Str::lower(Str::ascii((string) $protected));
+        $local = str_replace($placeholder, 'ñ', $local);
         $local = preg_replace('/\s+/', '-', $local);
-        $local = preg_replace('/[^a-z0-9\-\._]/', '', $local);
+        $local = preg_replace('/[^a-z0-9ñ\-\._]/u', '', $local);
         $local = trim((string) $local, '-._');
 
         return $local !== '' ? $local : 'estacion';
