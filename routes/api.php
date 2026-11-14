@@ -124,15 +124,17 @@ Route::group(['middleware' => ['auth:api'], 'prefix' => '/purchases'], function 
 Route::group(['middleware' => ['auth:api'], 'prefix' => '/sales'], function () {
     Route::get('/catalog', [SaleController::class, 'catalog']);
     Route::get('place/{place}', [SaleController::class, 'byPlace']);
+    Route::get('{id}', [SaleController::class, 'show']);
     Route::post('/', [SaleController::class, 'store']);
+    Route::post('{id}/cancel', [SaleController::class, 'cancel']);
 });
 
 Route::group(['middleware' => ['auth:api'], 'prefix' => '/register-sessions'], function () {
     Route::get('/current', [RegisterSessionController::class, 'current']);
+    Route::get('/summary', [RegisterSessionController::class, 'summary']);
     Route::post('/open', [RegisterSessionController::class, 'open']);
     Route::post('/close', [RegisterSessionController::class, 'close']);
 });
-
 Route::group(['middleware' => ['auth:api'], 'prefix' => '/reports'], function () {
     Route::get('/', [ReportController::class, 'list']);
     Route::get('/{id}', [ReportController::class, 'execute']);

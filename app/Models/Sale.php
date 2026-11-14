@@ -11,6 +11,16 @@ class Sale extends Model
     public const STATUS_COMPLETED = 'completed';
     public const STATUS_CANCELLED = 'cancelled';
 
+    public const PAYMENT_CASH = 'cash';
+    public const PAYMENT_CARD = 'card';
+    public const PAYMENT_TRANSFER = 'transfer';
+
+    public const PAYMENT_METHODS = [
+        self::PAYMENT_CASH,
+        self::PAYMENT_CARD,
+        self::PAYMENT_TRANSFER,
+    ];
+
     protected $fillable = [
         'place_id',
         'station_id',
@@ -21,13 +31,22 @@ class Sale extends Model
         'total',
         'cost_total',
         'status',
+        'payment_method',
+        'amount_received',
+        'change_amount',
+        'cancelled_at',
+        'cancelled_by',
+        'cancel_reason',
     ];
 
     protected $casts = [
         'sold_at' => 'datetime',
+        'cancelled_at' => 'datetime',
         'subtotal' => 'float',
         'total' => 'float',
         'cost_total' => 'float',
+        'amount_received' => 'float',
+        'change_amount' => 'float',
     ];
 
     protected $appends = ['profit'];
@@ -44,8 +63,22 @@ class Sale extends Model
         return $this->belongsTo(Station::class);
     }
 
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
+
+    public function cancelledByUser(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'cancelled_by');
+    }
+
     public function getProfitAttribute(): float
     {
+        if ($this->status === self::STATUS_CANCELLED) {
+            return 0.0;
+        }
+
         return round(((float) $this->total) - ((float) $this->cost_total), 2);
     }
 }

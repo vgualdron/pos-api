@@ -19,6 +19,13 @@ class RegisterSession extends Model
         'closed_at',
         'opening_cash',
         'closing_cash',
+        'expected_cash',
+        'cash_sales_total',
+        'card_sales_total',
+        'transfer_sales_total',
+        'sales_count',
+        'difference_cash',
+        'notes',
         'status',
     ];
 
@@ -27,6 +34,12 @@ class RegisterSession extends Model
         'closed_at' => 'datetime',
         'opening_cash' => 'float',
         'closing_cash' => 'float',
+        'expected_cash' => 'float',
+        'cash_sales_total' => 'float',
+        'card_sales_total' => 'float',
+        'transfer_sales_total' => 'float',
+        'difference_cash' => 'float',
+        'sales_count' => 'integer',
     ];
 
     public function station(): BelongsTo

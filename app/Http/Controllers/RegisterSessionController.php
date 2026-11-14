@@ -22,6 +22,15 @@ class RegisterSessionController extends Controller
         }
     }
 
+    public function summary(Request $request): JsonResponse
+    {
+        try {
+            return response()->json(['data' => $this->service->summary($request->user())]);
+        } catch (Exception $e) {
+            return response()->json(['error' => 'Error al consultar resumen de caja', 'message' => $e->getMessage()], 400);
+        }
+    }
+
     public function open(Request $request): JsonResponse
     {
         try {
@@ -40,7 +49,8 @@ class RegisterSessionController extends Controller
     {
         try {
             $data = $request->validate([
-                'closing_cash' => 'nullable|numeric|min:0',
+                'closing_cash' => 'required|numeric|min:0',
+                'notes' => 'nullable|string|max:255',
             ]);
             $session = $this->service->close($request->user(), $data);
 

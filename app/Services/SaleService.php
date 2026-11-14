@@ -7,6 +7,7 @@ use App\Models\RegisterSession;
 use App\Models\Sale;
 use App\Models\Station;
 use App\Models\StockLot;
+use App\Support\PlaceScope;
 use Carbon\Carbon;
 use Exception;
 use Illuminate\Support\Facades\DB;
@@ -35,13 +36,19 @@ class SaleService
             [$from, $to] = [$to->copy()->startOfDay(), $from->copy()->endOfDay()];
         }
 
-        return Sale::with(['lines.lots', 'station'])
+        return Sale::with(['lines.lots', 'station', 'user'])
             ->where('place_id', $placeId)
             ->whereBetween('sold_at', [$from, $to])
             ->orderByDesc('sold_at')
             ->orderByDesc('id')
             ->limit(1000)
             ->get();
+    }
+
+    public function find(int $id): Sale
+    {
+        return Sale::with(['lines.lots', 'lines.presentation', 'lines.product', 'station', 'user'])
+            ->findOrFail($id);
     }
 
     public function create($user, array $data): Sale
@@ -54,7 +61,12 @@ class SaleService
             throw new Exception('La venta necesita al menos un producto.');
         }
 
-        return DB::transaction(function () use ($station, $user, $session, $lines) {
+        $paymentMethod = $data['payment_method'] ?? Sale::PAYMENT_CASH;
+        if (!in_array($paymentMethod, Sale::PAYMENT_METHODS, true)) {
+            throw new Exception('Método de pago inválido.');
+        }
+
+        return DB::transaction(function () use ($station, $user, $session, $lines, $paymentMethod, $data) {
             $sale = Sale::create([
                 'place_id' => $station->place_id,
                 'station_id' => $station->id,
@@ -65,6 +77,7 @@ class SaleService
                 'total' => 0,
                 'cost_total' => 0,
                 'status' => Sale::STATUS_COMPLETED,
+                'payment_method' => $paymentMethod,
             ]);
 
             $subtotal = 0;
@@ -117,14 +130,69 @@ class SaleService
                 $costTotal += $lineCost;
             }
 
+            $total = round($subtotal, 2);
+            [$amountReceived, $changeAmount] = $this->resolvePaymentAmounts(
+                $paymentMethod,
+                $total,
+                array_key_exists('amount_received', $data) ? (float) $data['amount_received'] : null
+            );
+
             $sale->update([
-                'subtotal' => round($subtotal, 2),
-                'total' => round($subtotal, 2),
+                'subtotal' => $total,
+                'total' => $total,
                 'cost_total' => round($costTotal, 4),
+                'amount_received' => $amountReceived,
+                'change_amount' => $changeAmount,
             ]);
 
-            return $sale->fresh(['lines.lots', 'lines.presentation', 'lines.product']);
+            return $sale->fresh(['lines.lots', 'lines.presentation', 'lines.product', 'station', 'user']);
         });
+    }
+
+    public function cancel($user, int $saleId, ?string $reason = null): Sale
+    {
+        return DB::transaction(function () use ($user, $saleId, $reason) {
+            $sale = Sale::with(['lines.lots'])->lockForUpdate()->findOrFail($saleId);
+            PlaceScope::assert($user, (int) $sale->place_id, 'sales.allPlaces');
+
+            if ($sale->status === Sale::STATUS_CANCELLED) {
+                throw new Exception('La venta ya está anulada.');
+            }
+
+            foreach ($sale->lines as $line) {
+                foreach ($line->lots as $saleLineLot) {
+                    $lot = StockLot::lockForUpdate()->find($saleLineLot->stock_lot_id);
+                    if (!$lot) {
+                        continue;
+                    }
+                    $lot->qty_remaining = round(((float) $lot->qty_remaining) + (float) $saleLineLot->qty_base, 4);
+                    $lot->save();
+                }
+            }
+
+            $sale->update([
+                'status' => Sale::STATUS_CANCELLED,
+                'cancelled_at' => Carbon::now(),
+                'cancelled_by' => $user->id,
+                'cancel_reason' => $reason ? trim($reason) : null,
+            ]);
+
+            return $sale->fresh(['lines.lots', 'lines.presentation', 'lines.product', 'station', 'user']);
+        });
+    }
+
+    protected function resolvePaymentAmounts(string $method, float $total, ?float $amountReceived): array
+    {
+        if ($method === Sale::PAYMENT_CASH) {
+            $received = $amountReceived ?? $total;
+            if ($received + 0.0001 < $total) {
+                throw new Exception('El monto recibido es menor al total de la venta.');
+            }
+
+            return [round($received, 2), round($received - $total, 2)];
+        }
+
+        return [round($total, 2), 0.0];
     }
 
     protected function consumeFifo(
