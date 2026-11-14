@@ -33,7 +33,7 @@ class PosPermissionsSeeder extends Seeder
             ['name' => 'purchases.create', 'label' => 'Registrar compras', 'subgroup' => 'Compras', 'route' => '/purchase', 'icon' => 'local_shipping', 'order' => 2],
             ['name' => 'purchases.allPlaces', 'label' => 'Compras de todas las sedes', 'subgroup' => 'Compras', 'route' => '/purchase', 'icon' => 'local_shipping', 'order' => 2],
             ['name' => 'sales.list', 'label' => 'Listar ventas', 'subgroup' => 'Ventas', 'route' => '/sale', 'icon' => 'receipt_long', 'order' => 3],
-            ['name' => 'sales.create', 'label' => 'Cobrar en caja', 'subgroup' => 'Caja', 'route' => '/caja', 'icon' => 'point_of_sale', 'order' => 4],
+            ['name' => 'sales.create', 'label' => 'Cobrar en caja', 'subgroup' => 'Caja', 'route' => '/register', 'icon' => 'point_of_sale', 'order' => 4],
             ['name' => 'sales.allPlaces', 'label' => 'Ventas de todas las sedes', 'subgroup' => 'Ventas', 'route' => '/sale', 'icon' => 'receipt_long', 'order' => 3],
         ];
 
@@ -53,7 +53,7 @@ class PosPermissionsSeeder extends Seeder
 
         $caja = \App\Models\Role::updateOrCreate(
             ['name' => 'CAJA', 'guard_name' => 'api'],
-            ['route' => '/caja']
+            ['route' => '/register']
         );
         $caja->syncPermissions([
             'sales.create',

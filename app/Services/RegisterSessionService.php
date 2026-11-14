@@ -4,16 +4,19 @@ namespace App\Services;
 
 use App\Models\RegisterSession;
 use App\Models\Sale;
-use App\Models\Station;
+use App\Support\PosStation;
 use Carbon\Carbon;
 use Exception;
 use Illuminate\Support\Facades\DB;
 
 class RegisterSessionService
 {
-    public function current($user): ?RegisterSession
+    public function current($user, ?int $stationId = null): ?RegisterSession
     {
-        $station = $this->requireStation($user);
+        $station = PosStation::tryResolve($user, $stationId);
+        if (!$station) {
+            return null;
+        }
 
         return RegisterSession::where('station_id', $station->id)
             ->where('status', RegisterSession::STATUS_OPEN)
@@ -21,9 +24,9 @@ class RegisterSessionService
             ->first();
     }
 
-    public function summary($user): array
+    public function summary($user, ?int $stationId = null): array
     {
-        $session = $this->current($user);
+        $session = $this->current($user, $stationId);
         if (!$session) {
             throw new Exception('No hay una caja abierta.');
         }
@@ -33,8 +36,9 @@ class RegisterSessionService
 
     public function open($user, array $data): RegisterSession
     {
-        $station = $this->requireStation($user);
-        $existing = $this->current($user);
+        $stationId = isset($data['station_id']) ? (int) $data['station_id'] : null;
+        $station = PosStation::resolve($user, $stationId);
+        $existing = $this->current($user, $station->id);
         if ($existing) {
             return $existing;
         }
@@ -52,7 +56,8 @@ class RegisterSessionService
     public function close($user, array $data): RegisterSession
     {
         return DB::transaction(function () use ($user, $data) {
-            $open = $this->current($user);
+            $stationId = isset($data['station_id']) ? (int) $data['station_id'] : null;
+            $open = $this->current($user, $stationId);
             if (!$open) {
                 throw new Exception('No hay una caja abierta.');
             }
@@ -121,15 +126,5 @@ class RegisterSessionService
             'sales_total' => round($cash + $card + $transfer, 2),
             'expected_cash' => $expected,
         ];
-    }
-
-    protected function requireStation($user): Station
-    {
-        $user->loadMissing('station');
-        if (!$user->station) {
-            throw new Exception('El usuario no tiene una caja asignada.');
-        }
-
-        return $user->station;
     }
 }

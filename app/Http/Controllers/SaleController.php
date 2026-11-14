@@ -19,7 +19,10 @@ class SaleController extends Controller
     public function catalog(Request $request): JsonResponse
     {
         try {
-            return response()->json($this->service->catalogForUser($request->user()));
+            $stationId = $request->query('station_id', $request->input('station_id'));
+            $stationId = ($stationId === null || $stationId === '') ? null : (int) $stationId;
+
+            return response()->json($this->service->catalogForUser($request->user(), $stationId));
         } catch (Exception $e) {
             return response()->json(['error' => 'Error al cargar catálogo', 'message' => $e->getMessage()], 400);
         }
@@ -66,6 +69,7 @@ class SaleController extends Controller
                 'lines.*.qty' => 'required|numeric|min:0.0001',
                 'payment_method' => ['nullable', Rule::in(Sale::PAYMENT_METHODS)],
                 'amount_received' => 'nullable|numeric|min:0',
+                'station_id' => 'nullable|integer|exists:stations,id',
             ]);
             $sale = $this->service->create($request->user(), $data);
 

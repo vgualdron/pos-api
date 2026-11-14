@@ -8,15 +8,16 @@ use App\Models\Sale;
 use App\Models\Station;
 use App\Models\StockLot;
 use App\Support\PlaceScope;
+use App\Support\PosStation;
 use Carbon\Carbon;
 use Exception;
 use Illuminate\Support\Facades\DB;
 
 class SaleService
 {
-    public function catalogForUser($user)
+    public function catalogForUser($user, ?int $stationId = null)
     {
-        $station = $this->requireStation($user);
+        $station = PosStation::resolve($user, $stationId);
 
         return app(ProductService::class)->catalog((int) $station->place_id);
     }
@@ -53,7 +54,7 @@ class SaleService
 
     public function create($user, array $data): Sale
     {
-        $station = $this->requireStation($user);
+        $station = PosStation::resolve($user, isset($data['station_id']) ? (int) $data['station_id'] : null);
         $session = $this->requireOpenSession($station, $user);
         $lines = $data['lines'] ?? [];
 
@@ -242,16 +243,6 @@ class SaleService
         }
 
         return round($cost, 4);
-    }
-
-    protected function requireStation($user): Station
-    {
-        $user->loadMissing('station');
-        if (!$user->station) {
-            throw new Exception('El usuario no tiene una caja asignada.');
-        }
-
-        return $user->station;
     }
 
     protected function requireOpenSession(Station $station, $user): RegisterSession
