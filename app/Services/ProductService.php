@@ -2,33 +2,43 @@
 
 namespace App\Services;
 
+use App\Models\File;
 use App\Models\Product;
 use App\Models\ProductPresentation;
 use Exception;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 class ProductService
 {
+    public const IMAGE_NAME = 'PHOTO_PRODUCT';
+
     public function all()
     {
-        return Product::withSum('lots', 'qty_remaining')
-            ->orderBy('place_id')
-            ->orderBy('name')
-            ->get();
+        return $this->attachImageUrls(
+            Product::withSum('lots', 'qty_remaining')
+                ->orderBy('place_id')
+                ->orderBy('name')
+                ->get()
+        );
     }
 
     public function find($id): Product
     {
-        return Product::withSum('lots', 'qty_remaining')->findOrFail($id);
+        $product = Product::withSum('lots', 'qty_remaining')->findOrFail($id);
+
+        return $this->attachImageUrls(collect([$product]))->first();
     }
 
     public function findByPlace($placeId)
     {
-        return Product::withSum('lots', 'qty_remaining')
-            ->where('place_id', $placeId)
-            ->where('status', 'activo')
-            ->orderBy('name')
-            ->get();
+        return $this->attachImageUrls(
+            Product::withSum('lots', 'qty_remaining')
+                ->where('place_id', $placeId)
+                ->where('status', 'activo')
+                ->orderBy('name')
+                ->get()
+        );
     }
 
     public function catalog(int $placeId)
@@ -134,5 +144,29 @@ class ProductService
                 $first->update(['is_default' => true]);
             }
         }
+    }
+
+    protected function attachImageUrls(Collection $products): Collection
+    {
+        if ($products->isEmpty()) {
+            return $products;
+        }
+
+        $files = File::query()
+            ->where('model_name', 'products')
+            ->where('name', self::IMAGE_NAME)
+            ->whereIn('model_id', $products->pluck('id')->all())
+            ->orderByDesc('id')
+            ->get()
+            ->unique('model_id')
+            ->keyBy('model_id');
+
+        return $products->map(function (Product $product) use ($files) {
+            $file = $files->get($product->id);
+            $product->setAttribute('image_url', $file?->full_url);
+            $product->makeVisible(['image_url']);
+
+            return $product;
+        });
     }
 }
