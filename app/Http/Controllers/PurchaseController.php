@@ -31,6 +31,7 @@ class PurchaseController extends Controller
             $data = $request->validate([
                 'place_id' => 'required|integer|exists:places,id',
                 'purchased_at' => 'nullable|date',
+                'supplier_id' => 'nullable|integer|exists:suppliers,id',
                 'supplier_name' => 'nullable|string|max:255',
                 'notes' => 'nullable|string|max:1000',
                 'lines' => 'required|array|min:1',

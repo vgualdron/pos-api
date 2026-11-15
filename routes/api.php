@@ -11,6 +11,7 @@ use App\Http\Controllers\ReportController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\InventoryController;
 use App\Http\Controllers\StationController;
+use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\FileController;
 use App\Http\Controllers\ProductController;
@@ -120,6 +121,14 @@ Route::group(['middleware' => ['auth:api'], 'prefix' => '/products'], function (
 Route::group(['middleware' => ['auth:api'], 'prefix' => '/purchases'], function () {
     Route::get('place/{place}', [PurchaseController::class, 'byPlace']);
     Route::post('/', [PurchaseController::class, 'store']);
+});
+
+Route::group(['middleware' => ['auth:api'], 'prefix' => '/suppliers'], function () {
+    Route::get('place/{place}', [SupplierController::class, 'byPlace']);
+    Route::get('{id}', [SupplierController::class, 'show']);
+    Route::post('/', [SupplierController::class, 'store']);
+    Route::put('{id}', [SupplierController::class, 'update']);
+    Route::delete('{id}', [SupplierController::class, 'destroy']);
 });
 
 Route::group(['middleware' => ['auth:api'], 'prefix' => '/inventory'], function () {

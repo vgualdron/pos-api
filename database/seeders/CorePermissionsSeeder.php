@@ -492,6 +492,8 @@ class CorePermissionsSeeder extends Seeder
         $posNames = [
             'products.list', 'products.view', 'products.create', 'products.edit', 'products.delete', 'products.allPlaces',
             'purchases.list', 'purchases.create', 'purchases.allPlaces',
+            'suppliers.list', 'suppliers.create', 'suppliers.edit', 'suppliers.delete', 'suppliers.allPlaces',
+
             'sales.list', 'sales.create', 'sales.allPlaces',
             'register-sessions.list', 'register-sessions.allPlaces',
             'inventory.list', 'inventory.adjust', 'inventory.allPlaces',

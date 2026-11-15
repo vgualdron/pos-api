@@ -6,6 +6,7 @@ use App\Models\Product;
 use App\Models\ProductPresentation;
 use App\Models\Purchase;
 use App\Models\StockLot;
+use App\Models\Supplier;
 use Carbon\Carbon;
 use Exception;
 use Illuminate\Support\Facades\DB;
@@ -14,7 +15,7 @@ class PurchaseService
 {
     public function allByPlace(int $placeId)
     {
-        return Purchase::with(['lines.product', 'lines.presentation'])
+        return Purchase::with(['lines.product', 'lines.presentation', 'supplier'])
             ->where('place_id', $placeId)
             ->orderByDesc('purchased_at')
             ->orderByDesc('id')
@@ -35,12 +36,27 @@ class PurchaseService
                 ? Carbon::parse($data['purchased_at'])
                 : Carbon::now();
 
+            $supplierId = isset($data['supplier_id']) ? (int) $data['supplier_id'] : null;
+            $supplierName = $data['supplier_name'] ?? null;
+
+            if ($supplierId) {
+                $supplier = Supplier::findOrFail($supplierId);
+                if ((int) $supplier->place_id !== $placeId) {
+                    throw new Exception('El proveedor no pertenece a esta sede.');
+                }
+                if ($supplier->status !== 'activo') {
+                    throw new Exception('El proveedor está inactivo.');
+                }
+                $supplierName = $supplier->name;
+            }
+
             $purchase = Purchase::create([
                 'place_id' => $placeId,
+                'supplier_id' => $supplierId,
                 'station_id' => $user->station_id,
                 'user_id' => $user->id,
                 'purchased_at' => $purchasedAt,
-                'supplier_name' => $data['supplier_name'] ?? null,
+                'supplier_name' => $supplierName,
                 'notes' => $data['notes'] ?? null,
                 'status' => 'completed',
             ]);

@@ -10,6 +10,7 @@ class Purchase extends Model
 {
     protected $fillable = [
         'place_id',
+        'supplier_id',
         'station_id',
         'user_id',
         'purchased_at',
@@ -22,11 +23,16 @@ class Purchase extends Model
         'purchased_at' => 'datetime',
     ];
 
-    protected $with = ['lines'];
+    protected $with = ['lines', 'supplier'];
 
     public function place(): BelongsTo
     {
         return $this->belongsTo(Place::class);
+    }
+
+    public function supplier(): BelongsTo
+    {
+        return $this->belongsTo(Supplier::class);
     }
 
     public function lines(): HasMany
