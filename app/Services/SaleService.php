@@ -103,7 +103,22 @@ class SaleService
 
                 $factor = (float) $presentation->factor;
                 $qtyBase = round($qty * $factor, 4);
-                $unitPrice = (float) $presentation->sale_price;
+                $catalogPrice = (float) $presentation->sale_price;
+                $unitPrice = $catalogPrice;
+
+                if (array_key_exists('unit_price', $row) && $row['unit_price'] !== null && $row['unit_price'] !== '') {
+                    $requestedPrice = round((float) $row['unit_price'], 2);
+                    if ($requestedPrice < 0) {
+                        throw new Exception('El precio de venta no puede ser negativo.');
+                    }
+                    if (abs($requestedPrice - $catalogPrice) > 0.0001) {
+                        if (!$user->can('sales.overridePrice')) {
+                            throw new Exception('No tiene permiso para cambiar el precio en la venta.');
+                        }
+                    }
+                    $unitPrice = $requestedPrice;
+                }
+
                 $lineTotal = round($qty * $unitPrice, 2);
 
                 $saleLine = $sale->lines()->create([

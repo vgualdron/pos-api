@@ -67,6 +67,7 @@ class SaleController extends Controller
                 'lines' => 'required|array|min:1',
                 'lines.*.product_presentation_id' => 'required|integer|exists:product_presentations,id',
                 'lines.*.qty' => 'required|numeric|min:0.0001',
+                'lines.*.unit_price' => 'nullable|numeric|min:0',
                 'payment_method' => ['nullable', Rule::in(Sale::PAYMENT_METHODS)],
                 'amount_received' => 'nullable|numeric|min:0',
                 'station_id' => 'nullable|integer|exists:stations,id',

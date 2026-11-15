@@ -494,7 +494,7 @@ class CorePermissionsSeeder extends Seeder
             'purchases.list', 'purchases.create', 'purchases.allPlaces',
             'suppliers.list', 'suppliers.create', 'suppliers.edit', 'suppliers.delete', 'suppliers.allPlaces',
 
-            'sales.list', 'sales.create', 'sales.allPlaces',
+            'sales.list', 'sales.create', 'sales.overridePrice', 'sales.allPlaces',
             'register-sessions.list', 'register-sessions.allPlaces',
             'inventory.list', 'inventory.adjust', 'inventory.allPlaces',
         ];

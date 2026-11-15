@@ -39,6 +39,7 @@ class PosPermissionsSeeder extends Seeder
             ['name' => 'suppliers.allPlaces', 'label' => 'Proveedores de todas las sedes', 'subgroup' => 'Proveedores', 'route' => '/supplier', 'icon' => 'handshake', 'order' => 2],
             ['name' => 'sales.list', 'label' => 'Listar ventas', 'subgroup' => 'Ventas', 'route' => '/sale', 'icon' => 'receipt_long', 'order' => 3],
             ['name' => 'sales.create', 'label' => 'Cobrar en caja', 'subgroup' => 'Caja', 'route' => '/register', 'icon' => 'point_of_sale', 'order' => 4],
+            ['name' => 'sales.overridePrice', 'label' => 'Cambiar precio en venta', 'subgroup' => 'Caja', 'route' => '/register', 'icon' => 'point_of_sale', 'order' => 4],
             ['name' => 'sales.allPlaces', 'label' => 'Ventas de todas las sedes', 'subgroup' => 'Ventas', 'route' => '/sale', 'icon' => 'receipt_long', 'order' => 3],
             ['name' => 'register-sessions.list', 'label' => 'Historial de cierres', 'subgroup' => 'Cierres de caja', 'route' => '/register-session', 'icon' => 'account_balance_wallet', 'order' => 5],
             ['name' => 'register-sessions.allPlaces', 'label' => 'Cierres de todas las sedes', 'subgroup' => 'Cierres de caja', 'route' => '/register-session', 'icon' => 'account_balance_wallet', 'order' => 5],
