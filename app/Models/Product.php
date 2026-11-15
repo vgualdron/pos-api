@@ -14,12 +14,17 @@ class Product extends Model
         'sku',
         'barcode',
         'base_unit_name',
+        'min_stock',
         'status',
     ];
 
     protected $with = ['presentations'];
 
     protected $appends = ['stock_on_hand'];
+
+    protected $casts = [
+        'min_stock' => 'float',
+    ];
 
     public function place(): BelongsTo
     {

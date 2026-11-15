@@ -37,6 +37,9 @@ class PosPermissionsSeeder extends Seeder
             ['name' => 'sales.allPlaces', 'label' => 'Ventas de todas las sedes', 'subgroup' => 'Ventas', 'route' => '/sale', 'icon' => 'receipt_long', 'order' => 3],
             ['name' => 'register-sessions.list', 'label' => 'Historial de cierres', 'subgroup' => 'Cierres de caja', 'route' => '/register-session', 'icon' => 'account_balance_wallet', 'order' => 5],
             ['name' => 'register-sessions.allPlaces', 'label' => 'Cierres de todas las sedes', 'subgroup' => 'Cierres de caja', 'route' => '/register-session', 'icon' => 'account_balance_wallet', 'order' => 5],
+            ['name' => 'inventory.list', 'label' => 'Ver inventario', 'subgroup' => 'Inventario', 'route' => '/inventory', 'icon' => 'warehouse', 'order' => 6],
+            ['name' => 'inventory.adjust', 'label' => 'Ajustar inventario', 'subgroup' => 'Inventario', 'route' => '/inventory', 'icon' => 'warehouse', 'order' => 6],
+            ['name' => 'inventory.allPlaces', 'label' => 'Inventario de todas las sedes', 'subgroup' => 'Inventario', 'route' => '/inventory', 'icon' => 'warehouse', 'order' => 6],
         ];
 
         foreach ($permissions as $row) {

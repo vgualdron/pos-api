@@ -9,6 +9,7 @@ use App\Http\Controllers\PermissionController;
 use App\Http\Controllers\PlaceController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\RoleController;
+use App\Http\Controllers\InventoryController;
 use App\Http\Controllers\StationController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\FileController;
@@ -119,6 +120,13 @@ Route::group(['middleware' => ['auth:api'], 'prefix' => '/products'], function (
 Route::group(['middleware' => ['auth:api'], 'prefix' => '/purchases'], function () {
     Route::get('place/{place}', [PurchaseController::class, 'byPlace']);
     Route::post('/', [PurchaseController::class, 'store']);
+});
+
+Route::group(['middleware' => ['auth:api'], 'prefix' => '/inventory'], function () {
+    Route::get('place/{place}/lots', [InventoryController::class, 'lots']);
+    Route::get('place/{place}/products', [InventoryController::class, 'products']);
+    Route::get('place/{place}/summary', [InventoryController::class, 'summary']);
+    Route::post('/adjust', [InventoryController::class, 'adjust']);
 });
 
 Route::group(['middleware' => ['auth:api'], 'prefix' => '/sales'], function () {
