@@ -493,6 +493,7 @@ class CorePermissionsSeeder extends Seeder
             'products.list', 'products.view', 'products.create', 'products.edit', 'products.delete', 'products.allPlaces',
             'purchases.list', 'purchases.create', 'purchases.allPlaces',
             'sales.list', 'sales.create', 'sales.allPlaces',
+            'register-sessions.list', 'register-sessions.allPlaces',
         ];
         Permission::whereNotIn('name', array_merge($activeNames, $posNames))->delete();
 

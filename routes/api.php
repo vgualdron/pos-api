@@ -132,6 +132,7 @@ Route::group(['middleware' => ['auth:api'], 'prefix' => '/sales'], function () {
 Route::group(['middleware' => ['auth:api'], 'prefix' => '/register-sessions'], function () {
     Route::get('/current', [RegisterSessionController::class, 'current']);
     Route::get('/summary', [RegisterSessionController::class, 'summary']);
+    Route::get('place/{place}', [RegisterSessionController::class, 'byPlace']);
     Route::post('/open', [RegisterSessionController::class, 'open']);
     Route::post('/close', [RegisterSessionController::class, 'close']);
 });

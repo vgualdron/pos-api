@@ -163,7 +163,8 @@ class ProductService
 
         return $products->map(function (Product $product) use ($files) {
             $file = $files->get($product->id);
-            $product->setAttribute('image_url', $file?->full_url);
+            // Relative storage path; the frontend prefixes URL_FILES.
+            $product->setAttribute('image_url', $file?->url);
             $product->makeVisible(['image_url']);
 
             return $product;

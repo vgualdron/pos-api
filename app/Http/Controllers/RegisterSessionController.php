@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Services\RegisterSessionService;
+use App\Support\PlaceScope;
 use Exception;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -11,6 +12,31 @@ class RegisterSessionController extends Controller
 {
     public function __construct(protected RegisterSessionService $service)
     {
+    }
+
+    public function byPlace(Request $request, $place): JsonResponse
+    {
+        try {
+            PlaceScope::assert(
+                $request->user(),
+                (int) $place,
+                'register-sessions.allPlaces',
+                'sales.allPlaces'
+            );
+
+            $data = $request->validate([
+                'date_from' => 'nullable|date_format:Y-m-d',
+                'date_to' => 'nullable|date_format:Y-m-d',
+            ]);
+
+            return response()->json($this->service->historyForPlace(
+                (int) $place,
+                $data['date_from'] ?? null,
+                $data['date_to'] ?? null
+            ));
+        } catch (Exception $e) {
+            return response()->json(['error' => 'Error al listar cierres de caja', 'message' => $e->getMessage()], 400);
+        }
     }
 
     public function current(Request $request): JsonResponse
