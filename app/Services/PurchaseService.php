@@ -13,14 +13,62 @@ use Illuminate\Support\Facades\DB;
 
 class PurchaseService
 {
-    public function allByPlace(int $placeId)
-    {
-        return Purchase::with(['lines.product', 'lines.presentation', 'supplier'])
+    public function allByPlace(
+        int $placeId,
+        ?string $dateFrom = null,
+        ?string $dateTo = null,
+        ?int $supplierId = null,
+        ?string $search = null
+    ) {
+        $from = $dateFrom
+            ? Carbon::parse($dateFrom)->startOfDay()
+            : Carbon::today()->startOfDay();
+        $to = $dateTo
+            ? Carbon::parse($dateTo)->endOfDay()
+            : ($dateFrom
+                ? Carbon::parse($dateFrom)->endOfDay()
+                : Carbon::today()->endOfDay());
+
+        if ($to->lt($from)) {
+            [$from, $to] = [$to->copy()->startOfDay(), $from->copy()->endOfDay()];
+        }
+
+        $query = Purchase::with(['lines.product', 'lines.presentation', 'lines.stockLot', 'supplier', 'user'])
             ->where('place_id', $placeId)
+            ->whereBetween('purchased_at', [$from, $to]);
+
+        if ($supplierId) {
+            $query->where('supplier_id', $supplierId);
+        }
+
+        if ($search) {
+            $term = trim($search);
+            if ($term !== '') {
+                $query->where(function ($inner) use ($term) {
+                    $like = '%' . $term . '%';
+                    $inner->where('supplier_name', 'like', $like)
+                        ->orWhere('notes', 'like', $like)
+                        ->orWhereHas('supplier', function ($supplier) use ($like) {
+                            $supplier->where('name', 'like', $like);
+                        })
+                        ->orWhereHas('lines.product', function ($product) use ($like) {
+                            $product->where('name', 'like', $like);
+                        });
+                });
+            }
+        }
+
+        return $query
             ->orderByDesc('purchased_at')
             ->orderByDesc('id')
-            ->limit(200)
+            ->limit(1000)
             ->get();
+    }
+
+    public function find(int $id): Purchase
+    {
+        return Purchase::with(['lines.product', 'lines.presentation', 'lines.stockLot', 'supplier', 'user'])
+            ->findOrFail($id);
     }
 
     public function create($user, array $data): Purchase
@@ -104,7 +152,7 @@ class PurchaseService
                 ]);
             }
 
-            return $purchase->fresh(['lines.product', 'lines.presentation', 'lines.stockLot']);
+            return $purchase->fresh(['lines.product', 'lines.presentation', 'lines.stockLot', 'supplier', 'user']);
         });
     }
 }

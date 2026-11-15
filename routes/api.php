@@ -120,6 +120,7 @@ Route::group(['middleware' => ['auth:api'], 'prefix' => '/products'], function (
 
 Route::group(['middleware' => ['auth:api'], 'prefix' => '/purchases'], function () {
     Route::get('place/{place}', [PurchaseController::class, 'byPlace']);
+    Route::get('{id}', [PurchaseController::class, 'show']);
     Route::post('/', [PurchaseController::class, 'store']);
 });
 
@@ -135,6 +136,7 @@ Route::group(['middleware' => ['auth:api'], 'prefix' => '/inventory'], function 
     Route::get('place/{place}/lots', [InventoryController::class, 'lots']);
     Route::get('place/{place}/products', [InventoryController::class, 'products']);
     Route::get('place/{place}/summary', [InventoryController::class, 'summary']);
+    Route::get('place/{place}/adjustments', [InventoryController::class, 'adjustments']);
     Route::post('/adjust', [InventoryController::class, 'adjust']);
 });
 

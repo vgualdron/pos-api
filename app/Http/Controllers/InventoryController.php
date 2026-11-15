@@ -57,6 +57,29 @@ class InventoryController extends Controller
         }
     }
 
+    public function adjustments(Request $request, $place): JsonResponse
+    {
+        try {
+            PlaceScope::assert($request->user(), (int) $place, 'inventory.allPlaces', 'products.allPlaces');
+            $data = $request->validate([
+                'date_from' => 'nullable|date_format:Y-m-d',
+                'date_to' => 'nullable|date_format:Y-m-d',
+                'type' => ['nullable', Rule::in(StockAdjustment::TYPES)],
+                'q' => 'nullable|string|max:120',
+            ]);
+
+            return response()->json($this->service->adjustmentsForPlace(
+                (int) $place,
+                $data['date_from'] ?? null,
+                $data['date_to'] ?? null,
+                $data['type'] ?? null,
+                $data['q'] ?? null
+            ));
+        } catch (Exception $e) {
+            return response()->json(['error' => 'Error al listar ajustes', 'message' => $e->getMessage()], 400);
+        }
+    }
+
     public function adjust(Request $request): JsonResponse
     {
         try {

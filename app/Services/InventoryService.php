@@ -128,6 +128,53 @@ class InventoryService
         ];
     }
 
+    public function adjustmentsForPlace(
+        int $placeId,
+        ?string $dateFrom = null,
+        ?string $dateTo = null,
+        ?string $type = null,
+        ?string $search = null
+    ) {
+        $from = $dateFrom
+            ? Carbon::parse($dateFrom)->startOfDay()
+            : Carbon::today()->subDays(29)->startOfDay();
+        $to = $dateTo
+            ? Carbon::parse($dateTo)->endOfDay()
+            : Carbon::today()->endOfDay();
+
+        if ($to->lt($from)) {
+            [$from, $to] = [$to->copy()->startOfDay(), $from->copy()->endOfDay()];
+        }
+
+        $query = StockAdjustment::with(['product', 'lot', 'user'])
+            ->where('place_id', $placeId)
+            ->whereBetween('created_at', [$from, $to]);
+
+        if ($type && in_array($type, StockAdjustment::TYPES, true)) {
+            $query->where('type', $type);
+        }
+
+        if ($search) {
+            $term = '%' . trim($search) . '%';
+            $query->where(function ($q) use ($term) {
+                $q->where('notes', 'like', $term)
+                    ->orWhereHas('product', function ($pq) use ($term) {
+                        $pq->where('name', 'like', $term)
+                            ->orWhere('sku', 'like', $term);
+                    })
+                    ->orWhereHas('lot', function ($lq) use ($term) {
+                        $lq->where('lot_code', 'like', $term);
+                    });
+            });
+        }
+
+        return $query
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->limit(1000)
+            ->get();
+    }
+
     public function adjust($user, array $data): StockLot
     {
         return DB::transaction(function () use ($user, $data) {

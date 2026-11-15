@@ -19,9 +19,34 @@ class PurchaseController extends Controller
         try {
             PlaceScope::assert($request->user(), (int) $place, 'purchases.allPlaces');
 
-            return response()->json($this->service->allByPlace((int) $place));
+            $data = $request->validate([
+                'date_from' => 'nullable|date_format:Y-m-d',
+                'date_to' => 'nullable|date_format:Y-m-d',
+                'supplier_id' => 'nullable|integer|exists:suppliers,id',
+                'q' => 'nullable|string|max:120',
+            ]);
+
+            return response()->json($this->service->allByPlace(
+                (int) $place,
+                $data['date_from'] ?? null,
+                $data['date_to'] ?? null,
+                isset($data['supplier_id']) ? (int) $data['supplier_id'] : null,
+                $data['q'] ?? null
+            ));
         } catch (Exception $e) {
             return response()->json(['error' => 'Error al listar compras', 'message' => $e->getMessage()], 400);
+        }
+    }
+
+    public function show(Request $request, $id): JsonResponse
+    {
+        try {
+            $purchase = $this->service->find((int) $id);
+            PlaceScope::assert($request->user(), (int) $purchase->place_id, 'purchases.allPlaces');
+
+            return response()->json($purchase);
+        } catch (Exception $e) {
+            return response()->json(['error' => 'Error al consultar la compra', 'message' => $e->getMessage()], 404);
         }
     }
 
