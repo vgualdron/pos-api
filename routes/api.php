@@ -13,6 +13,7 @@ use App\Http\Controllers\InventoryController;
 use App\Http\Controllers\StationController;
 use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\CustomerController;
+use App\Http\Controllers\GeoController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\FileController;
 use App\Http\Controllers\ProductController;
@@ -140,6 +141,11 @@ Route::group(['middleware' => ['auth:api'], 'prefix' => '/customers'], function 
     Route::post('/', [CustomerController::class, 'store']);
     Route::put('{id}', [CustomerController::class, 'update']);
     Route::delete('{id}', [CustomerController::class, 'destroy']);
+});
+
+Route::group(['middleware' => ['auth:api'], 'prefix' => '/geo'], function () {
+    Route::get('/departments', [GeoController::class, 'departments']);
+    Route::get('/municipalities', [GeoController::class, 'municipalities']);
 });
 
 Route::group(['middleware' => ['auth:api'], 'prefix' => '/inventory'], function () {
