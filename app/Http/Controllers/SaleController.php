@@ -70,6 +70,7 @@ class SaleController extends Controller
                 'lines.*.unit_price' => 'nullable|numeric|min:0',
                 'payment_method' => ['nullable', Rule::in(Sale::PAYMENT_METHODS)],
                 'amount_received' => 'nullable|numeric|min:0',
+                'customer_id' => 'nullable|integer|exists:customers,id',
                 'station_id' => 'nullable|integer|exists:stations,id',
             ]);
             $sale = $this->service->create($request->user(), $data);

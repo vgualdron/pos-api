@@ -37,15 +37,20 @@ class PosPermissionsSeeder extends Seeder
             ['name' => 'suppliers.edit', 'label' => 'Editar proveedores', 'subgroup' => 'Proveedores', 'route' => '/supplier', 'icon' => 'handshake', 'order' => 2],
             ['name' => 'suppliers.delete', 'label' => 'Eliminar proveedores', 'subgroup' => 'Proveedores', 'route' => '/supplier', 'icon' => 'handshake', 'order' => 2],
             ['name' => 'suppliers.allPlaces', 'label' => 'Proveedores de todas las sedes', 'subgroup' => 'Proveedores', 'route' => '/supplier', 'icon' => 'handshake', 'order' => 2],
-            ['name' => 'sales.list', 'label' => 'Listar ventas', 'subgroup' => 'Ventas', 'route' => '/sale', 'icon' => 'receipt_long', 'order' => 3],
-            ['name' => 'sales.create', 'label' => 'Cobrar en caja', 'subgroup' => 'Caja', 'route' => '/register', 'icon' => 'point_of_sale', 'order' => 4],
-            ['name' => 'sales.overridePrice', 'label' => 'Cambiar precio en venta', 'subgroup' => 'Caja', 'route' => '/register', 'icon' => 'point_of_sale', 'order' => 4],
-            ['name' => 'sales.allPlaces', 'label' => 'Ventas de todas las sedes', 'subgroup' => 'Ventas', 'route' => '/sale', 'icon' => 'receipt_long', 'order' => 3],
-            ['name' => 'register-sessions.list', 'label' => 'Historial de cierres', 'subgroup' => 'Cierres de caja', 'route' => '/register-session', 'icon' => 'account_balance_wallet', 'order' => 5],
-            ['name' => 'register-sessions.allPlaces', 'label' => 'Cierres de todas las sedes', 'subgroup' => 'Cierres de caja', 'route' => '/register-session', 'icon' => 'account_balance_wallet', 'order' => 5],
-            ['name' => 'inventory.list', 'label' => 'Ver inventario', 'subgroup' => 'Inventario', 'route' => '/inventory', 'icon' => 'warehouse', 'order' => 6],
-            ['name' => 'inventory.adjust', 'label' => 'Ajustar inventario', 'subgroup' => 'Inventario', 'route' => '/inventory', 'icon' => 'warehouse', 'order' => 6],
-            ['name' => 'inventory.allPlaces', 'label' => 'Inventario de todas las sedes', 'subgroup' => 'Inventario', 'route' => '/inventory', 'icon' => 'warehouse', 'order' => 6],
+            ['name' => 'customers.list', 'label' => 'Listar clientes', 'subgroup' => 'Clientes', 'route' => '/customer', 'icon' => 'groups', 'order' => 3],
+            ['name' => 'customers.create', 'label' => 'Crear clientes', 'subgroup' => 'Clientes', 'route' => '/customer', 'icon' => 'groups', 'order' => 3],
+            ['name' => 'customers.edit', 'label' => 'Editar clientes', 'subgroup' => 'Clientes', 'route' => '/customer', 'icon' => 'groups', 'order' => 3],
+            ['name' => 'customers.delete', 'label' => 'Eliminar clientes', 'subgroup' => 'Clientes', 'route' => '/customer', 'icon' => 'groups', 'order' => 3],
+            ['name' => 'customers.allPlaces', 'label' => 'Clientes de todas las sedes', 'subgroup' => 'Clientes', 'route' => '/customer', 'icon' => 'groups', 'order' => 3],
+            ['name' => 'sales.list', 'label' => 'Listar ventas', 'subgroup' => 'Ventas', 'route' => '/sale', 'icon' => 'receipt_long', 'order' => 4],
+            ['name' => 'sales.create', 'label' => 'Cobrar en caja', 'subgroup' => 'Caja', 'route' => '/register', 'icon' => 'point_of_sale', 'order' => 5],
+            ['name' => 'sales.overridePrice', 'label' => 'Cambiar precio en venta', 'subgroup' => 'Caja', 'route' => '/register', 'icon' => 'point_of_sale', 'order' => 5],
+            ['name' => 'sales.allPlaces', 'label' => 'Ventas de todas las sedes', 'subgroup' => 'Ventas', 'route' => '/sale', 'icon' => 'receipt_long', 'order' => 4],
+            ['name' => 'register-sessions.list', 'label' => 'Historial de cierres', 'subgroup' => 'Cierres de caja', 'route' => '/register-session', 'icon' => 'account_balance_wallet', 'order' => 6],
+            ['name' => 'register-sessions.allPlaces', 'label' => 'Cierres de todas las sedes', 'subgroup' => 'Cierres de caja', 'route' => '/register-session', 'icon' => 'account_balance_wallet', 'order' => 6],
+            ['name' => 'inventory.list', 'label' => 'Ver inventario', 'subgroup' => 'Inventario', 'route' => '/inventory', 'icon' => 'warehouse', 'order' => 7],
+            ['name' => 'inventory.adjust', 'label' => 'Ajustar inventario', 'subgroup' => 'Inventario', 'route' => '/inventory', 'icon' => 'warehouse', 'order' => 7],
+            ['name' => 'inventory.allPlaces', 'label' => 'Inventario de todas las sedes', 'subgroup' => 'Inventario', 'route' => '/inventory', 'icon' => 'warehouse', 'order' => 7],
         ];
 
         foreach ($permissions as $row) {
@@ -70,6 +75,8 @@ class PosPermissionsSeeder extends Seeder
             'sales.create',
             'products.list',
             'products.view',
+            'customers.list',
+            'customers.create',
         ]);
     }
 }

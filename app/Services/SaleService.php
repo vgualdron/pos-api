@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Customer;
 use App\Models\ProductPresentation;
 use App\Models\RegisterSession;
 use App\Models\Sale;
@@ -37,7 +38,7 @@ class SaleService
             [$from, $to] = [$to->copy()->startOfDay(), $from->copy()->endOfDay()];
         }
 
-        return Sale::with(['lines.lots', 'station', 'user'])
+        return Sale::with(['lines.lots', 'station', 'user', 'customer'])
             ->where('place_id', $placeId)
             ->whereBetween('sold_at', [$from, $to])
             ->orderByDesc('sold_at')
@@ -48,7 +49,7 @@ class SaleService
 
     public function find(int $id): Sale
     {
-        return Sale::with(['lines.lots', 'lines.presentation', 'lines.product', 'station', 'user'])
+        return Sale::with(['lines.lots', 'lines.presentation', 'lines.product', 'station', 'user', 'customer'])
             ->findOrFail($id);
     }
 
@@ -67,11 +68,14 @@ class SaleService
             throw new Exception('Método de pago inválido.');
         }
 
-        return DB::transaction(function () use ($station, $user, $session, $lines, $paymentMethod, $data) {
+        $customerId = $this->resolveCustomerId($station->place_id, $data['customer_id'] ?? null);
+
+        return DB::transaction(function () use ($station, $user, $session, $lines, $paymentMethod, $data, $customerId) {
             $sale = Sale::create([
                 'place_id' => $station->place_id,
                 'station_id' => $station->id,
                 'user_id' => $user->id,
+                'customer_id' => $customerId,
                 'register_session_id' => $session->id,
                 'sold_at' => Carbon::now(),
                 'subtotal' => 0,
@@ -161,7 +165,7 @@ class SaleService
                 'change_amount' => $changeAmount,
             ]);
 
-            return $sale->fresh(['lines.lots', 'lines.presentation', 'lines.product', 'station', 'user']);
+            return $sale->fresh(['lines.lots', 'lines.presentation', 'lines.product', 'station', 'user', 'customer']);
         });
     }
 
@@ -193,8 +197,25 @@ class SaleService
                 'cancel_reason' => $reason ? trim($reason) : null,
             ]);
 
-            return $sale->fresh(['lines.lots', 'lines.presentation', 'lines.product', 'station', 'user']);
+            return $sale->fresh(['lines.lots', 'lines.presentation', 'lines.product', 'station', 'user', 'customer']);
         });
+    }
+
+    protected function resolveCustomerId(int $placeId, $customerId): ?int
+    {
+        if ($customerId === null || $customerId === '' || $customerId === false) {
+            return null;
+        }
+
+        $customer = Customer::findOrFail((int) $customerId);
+        if ((int) $customer->place_id !== (int) $placeId) {
+            throw new Exception('El cliente no pertenece a esta sede.');
+        }
+        if ($customer->status !== 'activo') {
+            throw new Exception('El cliente no está activo.');
+        }
+
+        return (int) $customer->id;
     }
 
     protected function resolvePaymentAmounts(string $method, float $total, ?float $amountReceived): array

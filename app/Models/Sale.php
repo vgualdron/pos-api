@@ -25,6 +25,7 @@ class Sale extends Model
         'place_id',
         'station_id',
         'user_id',
+        'customer_id',
         'register_session_id',
         'sold_at',
         'subtotal',
@@ -66,6 +67,11 @@ class Sale extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function customer(): BelongsTo
+    {
+        return $this->belongsTo(Customer::class);
     }
 
     public function cancelledByUser(): BelongsTo
