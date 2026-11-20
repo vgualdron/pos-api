@@ -42,9 +42,8 @@ class FileController extends Controller
             $pathS3 = "$storage/$modelId/$nameComplete";
             $path = "$modelId/$nameComplete";
 
-            Storage::disk($storage)->makeDirectory((string) $modelId);
-
             $disk = Storage::disk($storage);
+            $disk->makeDirectory((string) $modelId);
 
             // Multipart (videos/archivos grandes) o base64 (flujo legacy de imágenes)
             if ($request->hasFile('upload')) {
@@ -52,18 +51,24 @@ class FileController extends Controller
                 if (!$uploaded->isValid()) {
                     throw new Exception('El archivo subido no es válido (posible límite del servidor).');
                 }
-                $status = $disk->put($path, fopen($uploaded->getRealPath(), 'r'));
+                $contents = file_get_contents($uploaded->getRealPath());
+                if ($contents === false || $contents === '') {
+                    throw new Exception('No se pudo leer el archivo subido.');
+                }
             } else {
                 $file = $request->input('file');
                 if (!$file) {
                     throw new Exception('No se recibió el archivo.');
                 }
-                $status = $disk->put($path, base64_decode($file));
+                $contents = base64_decode($file, true);
+                if ($contents === false || $contents === '') {
+                    throw new Exception('El contenido de la imagen no es válido (base64).');
+                }
             }
 
-            if ($status === false) {
-                throw new Exception('No se pudo guardar el archivo en almacenamiento.');
-            }
+            // Local disks often return false from put() when chmod/visibility fails,
+            // even if the bytes were written. Write + verify by existence.
+            $this->writeStoredFile($storage, $path, $contents);
 
             // Replace previous file: delete physical + DB row (old code only deleted the DB row).
             if (!$maintainFile) {
@@ -210,6 +215,37 @@ class FileController extends Controller
             'data' => $deleted,
             'message' => 'Succeed'
         ], JsonResponse::HTTP_OK);
+    }
+
+    /**
+     * Persist file bytes to a configured disk and confirm the path exists.
+     * Prefer direct local write to avoid Flysystem visibility/chmod false failures.
+     */
+    protected function writeStoredFile(string $diskName, string $path, string $contents): void
+    {
+        $root = config("filesystems.disks.{$diskName}.root");
+
+        if (is_string($root) && $root !== '') {
+            $fullPath = rtrim($root, "\\/").DIRECTORY_SEPARATOR.str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $path);
+            $directory = dirname($fullPath);
+
+            if (!is_dir($directory) && !mkdir($directory, 0755, true) && !is_dir($directory)) {
+                throw new Exception("No se pudo crear el directorio de almacenamiento: {$directory}");
+            }
+
+            if (file_put_contents($fullPath, $contents) === false) {
+                throw new Exception("No se pudo escribir el archivo: {$fullPath}");
+            }
+
+            return;
+        }
+
+        $disk = Storage::disk($diskName);
+        $written = $disk->put($path, $contents);
+
+        if ($written === false && !$disk->exists($path)) {
+            throw new Exception('No se pudo guardar el archivo en almacenamiento.');
+        }
     }
 
     /**
