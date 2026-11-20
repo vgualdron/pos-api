@@ -293,8 +293,9 @@ return new class extends Migration
             return;
         }
 
-        $extension = pathinfo($fileName, PATHINFO_EXTENSION) ?: 'jpg';
-        $storedName = 'PHOTO_PRODUCT-'.time().'-'.$productId.'.'.$extension;
+        $extension = strtolower(pathinfo($fileName, PATHINFO_EXTENSION) ?: 'jpg');
+        // Same stable name as FileController uploads (DB url must match disk file).
+        $storedName = 'PHOTO_PRODUCT.'.$extension;
         $relativePath = $productId.'/'.$storedName;
         $url = 'products/'.$relativePath;
 

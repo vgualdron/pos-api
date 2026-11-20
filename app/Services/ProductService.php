@@ -220,7 +220,11 @@ class ProductService
         return $products->map(function (Product $product) use ($files) {
             $file = $files->get($product->id);
             // Relative storage path; the frontend prefixes URL_FILES.
-            $product->setAttribute('image_url', $file?->url);
+            // Cache-bust with file id so re-uploads with stable filenames refresh in the UI.
+            $product->setAttribute(
+                'image_url',
+                $file?->url ? ($file->url.'?v='.$file->id) : null
+            );
             $product->makeVisible(['image_url']);
 
             return $product;
