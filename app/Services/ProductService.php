@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\File;
 use App\Models\Product;
+use App\Models\ProductCategory;
 use App\Models\ProductPresentation;
 use Exception;
 use Illuminate\Support\Collection;
@@ -30,20 +31,35 @@ class ProductService
         return $this->attachImageUrls(collect([$product]))->first();
     }
 
-    public function findByPlace($placeId)
+    public function findByPlace($placeId, bool $onlyActive = true)
     {
-        return $this->attachImageUrls(
-            Product::withSum('lots', 'qty_remaining')
-                ->where('place_id', $placeId)
-                ->where('status', 'activo')
-                ->orderBy('name')
-                ->get()
-        );
+        $query = Product::withSum('lots', 'qty_remaining')
+            ->where('place_id', $placeId)
+            ->orderBy('name');
+
+        if ($onlyActive) {
+            $query->where('status', 'activo');
+        }
+
+        return $this->attachImageUrls($query->get());
     }
 
     public function catalog(int $placeId)
     {
-        return $this->findByPlace($placeId);
+        $products = $this->findByPlace($placeId, true);
+        $favoriteIds = app(ProductFavoriteService::class)->favoriteProductIds($placeId);
+        $favoriteIndex = array_flip($favoriteIds);
+
+        return $products->map(function (Product $product) use ($favoriteIndex) {
+            $isFavorite = array_key_exists($product->id, $favoriteIndex);
+            $product->setAttribute('is_favorite', $isFavorite);
+            $product->setAttribute(
+                'favorite_sort',
+                $isFavorite ? ((int) $favoriteIndex[$product->id] + 1) : null
+            );
+
+            return $product;
+        });
     }
 
     public function create(array $data): Product
@@ -55,6 +71,12 @@ class ProductService
             if (empty($data['sku'])) {
                 $data['sku'] = null;
             }
+
+            if (array_key_exists('product_category_id', $data) && !$data['product_category_id']) {
+                $data['product_category_id'] = null;
+            }
+
+            $this->assertCategoryBelongsToPlace($data);
 
             $product = Product::create($data);
             $this->syncPresentations($product, $presentations);
@@ -73,6 +95,15 @@ class ProductService
             if (array_key_exists('sku', $data) && $data['sku'] === '') {
                 $data['sku'] = null;
             }
+
+            if (array_key_exists('product_category_id', $data) && !$data['product_category_id']) {
+                $data['product_category_id'] = null;
+            }
+
+            $this->assertCategoryBelongsToPlace([
+                ...$data,
+                'place_id' => $data['place_id'] ?? $product->place_id,
+            ]);
 
             $product->update($data);
 
@@ -151,6 +182,23 @@ class ProductService
             if ($first) {
                 $first->update(['is_default' => true]);
             }
+        }
+    }
+
+    protected function assertCategoryBelongsToPlace(array $data): void
+    {
+        if (!array_key_exists('product_category_id', $data) || $data['product_category_id'] === null) {
+            return;
+        }
+
+        $category = ProductCategory::find((int) $data['product_category_id']);
+        if (!$category) {
+            throw new Exception('La categoría no existe.');
+        }
+
+        $placeId = (int) ($data['place_id'] ?? 0);
+        if ($placeId && (int) $category->place_id !== $placeId) {
+            throw new Exception('La categoría no pertenece a esta sede.');
         }
     }
 

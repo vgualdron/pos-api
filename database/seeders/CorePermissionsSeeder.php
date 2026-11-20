@@ -490,7 +490,9 @@ class CorePermissionsSeeder extends Seeder
         // Remove legacy permissions from deleted modules.
         $activeNames = array_column($permissions, 'name');
         $posNames = [
+            'pos-dashboard.view', 'pos-dashboard.allPlaces',
             'products.list', 'products.view', 'products.create', 'products.edit', 'products.delete', 'products.allPlaces',
+            'product-categories.list', 'product-categories.create', 'product-categories.edit', 'product-categories.delete', 'product-categories.allPlaces',
             'purchases.list', 'purchases.create', 'purchases.allPlaces',
             'suppliers.list', 'suppliers.create', 'suppliers.edit', 'suppliers.delete', 'suppliers.allPlaces',
             'customers.list', 'customers.create', 'customers.edit', 'customers.delete', 'customers.allPlaces',

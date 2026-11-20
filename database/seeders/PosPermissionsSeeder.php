@@ -23,12 +23,19 @@ class PosPermissionsSeeder extends Seeder
         );
 
         $permissions = [
+            ['name' => 'pos-dashboard.view', 'label' => 'Ver dashboard', 'subgroup' => 'Dashboard', 'route' => '/pos-dashboard', 'icon' => 'dashboard', 'order' => 0],
+            ['name' => 'pos-dashboard.allPlaces', 'label' => 'Dashboard de todas las sedes', 'subgroup' => 'Dashboard', 'route' => '/pos-dashboard', 'icon' => 'dashboard', 'order' => 0],
             ['name' => 'products.list', 'label' => 'Listar productos', 'subgroup' => 'Productos', 'route' => '/product', 'icon' => 'inventory_2', 'order' => 1],
             ['name' => 'products.view', 'label' => 'Ver productos', 'subgroup' => 'Productos', 'route' => '/product', 'icon' => 'inventory_2', 'order' => 1],
             ['name' => 'products.create', 'label' => 'Crear productos', 'subgroup' => 'Productos', 'route' => '/product', 'icon' => 'inventory_2', 'order' => 1],
             ['name' => 'products.edit', 'label' => 'Editar productos', 'subgroup' => 'Productos', 'route' => '/product', 'icon' => 'inventory_2', 'order' => 1],
             ['name' => 'products.delete', 'label' => 'Eliminar productos', 'subgroup' => 'Productos', 'route' => '/product', 'icon' => 'inventory_2', 'order' => 1],
             ['name' => 'products.allPlaces', 'label' => 'Productos de todas las sedes', 'subgroup' => 'Productos', 'route' => '/product', 'icon' => 'inventory_2', 'order' => 1],
+            ['name' => 'product-categories.list', 'label' => 'Listar categorías', 'subgroup' => 'Categorías', 'route' => '/product-category', 'icon' => 'category', 'order' => 1],
+            ['name' => 'product-categories.create', 'label' => 'Crear categorías', 'subgroup' => 'Categorías', 'route' => '/product-category', 'icon' => 'category', 'order' => 1],
+            ['name' => 'product-categories.edit', 'label' => 'Editar categorías', 'subgroup' => 'Categorías', 'route' => '/product-category', 'icon' => 'category', 'order' => 1],
+            ['name' => 'product-categories.delete', 'label' => 'Eliminar categorías', 'subgroup' => 'Categorías', 'route' => '/product-category', 'icon' => 'category', 'order' => 1],
+            ['name' => 'product-categories.allPlaces', 'label' => 'Categorías de todas las sedes', 'subgroup' => 'Categorías', 'route' => '/product-category', 'icon' => 'category', 'order' => 1],
             ['name' => 'purchases.list', 'label' => 'Listar compras', 'subgroup' => 'Compras', 'route' => '/purchase', 'icon' => 'local_shipping', 'order' => 2],
             ['name' => 'purchases.create', 'label' => 'Registrar compras', 'subgroup' => 'Compras', 'route' => '/purchase', 'icon' => 'local_shipping', 'order' => 2],
             ['name' => 'purchases.allPlaces', 'label' => 'Compras de todas las sedes', 'subgroup' => 'Compras', 'route' => '/purchase', 'icon' => 'local_shipping', 'order' => 2],
@@ -75,6 +82,7 @@ class PosPermissionsSeeder extends Seeder
             'sales.create',
             'products.list',
             'products.view',
+            'product-categories.list',
             'customers.list',
             'customers.create',
         ]);

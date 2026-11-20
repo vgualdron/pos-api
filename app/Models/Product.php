@@ -10,6 +10,7 @@ class Product extends Model
 {
     protected $fillable = [
         'place_id',
+        'product_category_id',
         'name',
         'sku',
         'barcode',
@@ -18,7 +19,7 @@ class Product extends Model
         'status',
     ];
 
-    protected $with = ['presentations'];
+    protected $with = ['presentations', 'category'];
 
     protected $appends = ['stock_on_hand'];
 
@@ -31,9 +32,19 @@ class Product extends Model
         return $this->belongsTo(Place::class);
     }
 
+    public function category(): BelongsTo
+    {
+        return $this->belongsTo(ProductCategory::class, 'product_category_id');
+    }
+
     public function presentations(): HasMany
     {
         return $this->hasMany(ProductPresentation::class)->orderByDesc('is_default')->orderBy('factor');
+    }
+
+    public function favorites(): HasMany
+    {
+        return $this->hasMany(ProductFavorite::class);
     }
 
     public function lots(): HasMany

@@ -21,6 +21,9 @@ use App\Http\Controllers\PurchaseController;
 use App\Http\Controllers\RegisterSessionController;
 use App\Http\Controllers\SaleController;
 use App\Http\Controllers\TaxController;
+use App\Http\Controllers\ProductCategoryController;
+use App\Http\Controllers\ProductFavoriteController;
+use App\Http\Controllers\PosDashboardController;
 
 Route::get('/health', function (Request $request) {
     return 'Health ... active';
@@ -151,6 +154,24 @@ Route::group(['middleware' => ['auth:api'], 'prefix' => '/geo'], function () {
 
 Route::group(['middleware' => ['auth:api'], 'prefix' => '/taxes'], function () {
     Route::get('/', [TaxController::class, 'index']);
+});
+
+Route::group(['middleware' => ['auth:api'], 'prefix' => '/product-categories'], function () {
+    Route::get('place/{place}', [ProductCategoryController::class, 'byPlace']);
+    Route::get('{id}', [ProductCategoryController::class, 'show']);
+    Route::post('/', [ProductCategoryController::class, 'store']);
+    Route::put('{id}', [ProductCategoryController::class, 'update']);
+    Route::delete('{id}', [ProductCategoryController::class, 'destroy']);
+});
+
+Route::group(['middleware' => ['auth:api'], 'prefix' => '/product-favorites'], function () {
+    Route::get('place/{place}', [ProductFavoriteController::class, 'byPlace']);
+    Route::post('/toggle', [ProductFavoriteController::class, 'toggle']);
+    Route::put('/sync', [ProductFavoriteController::class, 'sync']);
+});
+
+Route::group(['middleware' => ['auth:api'], 'prefix' => '/pos-dashboard'], function () {
+    Route::get('place/{place}', [PosDashboardController::class, 'byPlace']);
 });
 
 Route::group(['middleware' => ['auth:api'], 'prefix' => '/inventory'], function () {
