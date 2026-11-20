@@ -44,34 +44,58 @@ class FileController extends Controller
 
             Storage::disk($storage)->makeDirectory((string) $modelId);
 
+            $disk = Storage::disk($storage);
+
             // Multipart (videos/archivos grandes) o base64 (flujo legacy de imágenes)
             if ($request->hasFile('upload')) {
                 $uploaded = $request->file('upload');
                 if (!$uploaded->isValid()) {
                     throw new Exception('El archivo subido no es válido (posible límite del servidor).');
                 }
-                $status = Storage::disk($storage)->put($path, fopen($uploaded->getRealPath(), 'r'));
+                $status = $disk->put($path, fopen($uploaded->getRealPath(), 'r'));
             } else {
                 $file = $request->input('file');
                 if (!$file) {
                     throw new Exception('No se recibió el archivo.');
                 }
-                $status = Storage::disk($storage)->put($path, base64_decode($file));
+                $status = $disk->put($path, base64_decode($file));
             }
 
-            /* if ($status) {
-                // Para disco público (ej: S3 con bucket público o local/public)
-                $url = Storage::disk($storage)->url($path);
+            if ($status === false) {
+                throw new Exception('No se pudo guardar el archivo en almacenamiento.');
+            }
 
-                // Si es privado, puedes generar un signed URL con tiempo de expiración
-                // $url = Storage::disk($storage)->temporaryUrl($path, now()->addMinutes(5));
-            } */
-
+            // Replace previous file: delete physical + DB row (old code only deleted the DB row).
             if (!$maintainFile) {
-                File::where('name', $name)
+                $previous = File::query()
+                    ->where('name', $name)
                     ->where('model_id', $modelId)
                     ->where('model_name', $modelName)
-                    ->delete();
+                    ->get();
+
+                foreach ($previous as $old) {
+                    $this->deletePhysicalFromUrl($storage, $old->url);
+                    $old->delete();
+                }
+
+                // Remove leftover orphans in the same folder (e.g. old seed webp with -id suffix).
+                try {
+                    foreach ($disk->files((string) $modelId) as $existing) {
+                        if ($existing === $path) {
+                            continue;
+                        }
+                        $base = basename((string) $existing);
+                        if (
+                            $base === $name
+                            || str_starts_with($base, $name.'.')
+                            || str_starts_with($base, $name.'-')
+                        ) {
+                            $disk->delete($existing);
+                        }
+                    }
+                } catch (\Throwable $e) {
+                    // Listing can fail on some hosts; new file + DB row are already the source of truth.
+                }
             }
 
             $item = File::create([
@@ -186,6 +210,36 @@ class FileController extends Controller
             'data' => $deleted,
             'message' => 'Succeed'
         ], JsonResponse::HTTP_OK);
+    }
+
+    /**
+     * DB url is usually "{disk}/{modelId}/{filename}" while the disk root is already .../public/{disk}.
+     */
+    protected function deletePhysicalFromUrl(string $diskName, ?string $url): void
+    {
+        $relativePath = ltrim(str_replace('\\', '/', (string) $url), '/');
+        if ($relativePath === '') {
+            return;
+        }
+
+        $prefix = $diskName.'/';
+        if (str_starts_with($relativePath, $prefix)) {
+            $relativePath = substr($relativePath, strlen($prefix));
+        }
+
+        $relativePath = ltrim($relativePath, '/');
+        if ($relativePath === '') {
+            return;
+        }
+
+        try {
+            $disk = Storage::disk($diskName);
+            if ($disk->exists($relativePath)) {
+                $disk->delete($relativePath);
+            }
+        } catch (\Throwable $e) {
+            // Ignore cleanup failures; the new upload remains valid.
+        }
     }
 
     public function downloadImageFromUrl(Request $request)
