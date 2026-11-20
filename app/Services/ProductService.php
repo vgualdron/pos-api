@@ -108,11 +108,18 @@ class ProductService
                 throw new Exception('El factor de cada presentación debe ser mayor que 0.');
             }
 
+            $tax = \App\Support\SalePricing::resolveTax(
+                isset($row['tax_id']) && $row['tax_id'] !== '' && $row['tax_id'] !== null
+                    ? (int) $row['tax_id']
+                    : null
+            );
+
             $payload = [
                 'name' => $row['name'] ?? '',
                 'factor' => $factor,
                 'sale_price' => (float) ($row['sale_price'] ?? 0),
-                'tax_rate' => \App\Support\SalePricing::normalizeTaxRate($row['tax_rate'] ?? 19),
+                'tax_id' => $tax->id,
+                'tax_rate' => round((float) $tax->rate, 2),
                 'barcode' => $row['barcode'] ?? null,
                 'is_default' => (bool) ($row['is_default'] ?? false),
                 'status' => $row['status'] ?? 'activo',

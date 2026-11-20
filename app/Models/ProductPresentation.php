@@ -12,6 +12,7 @@ class ProductPresentation extends Model
         'name',
         'factor',
         'sale_price',
+        'tax_id',
         'tax_rate',
         'barcode',
         'is_default',
@@ -25,8 +26,15 @@ class ProductPresentation extends Model
         'is_default' => 'boolean',
     ];
 
+    protected $with = ['tax'];
+
     public function product(): BelongsTo
     {
         return $this->belongsTo(Product::class);
+    }
+
+    public function tax(): BelongsTo
+    {
+        return $this->belongsTo(Tax::class);
     }
 }

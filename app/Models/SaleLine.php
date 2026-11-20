@@ -16,7 +16,10 @@ class SaleLine extends Model
         'factor',
         'qty_base',
         'unit_price',
+        'tax_id',
         'tax_rate',
+        'tax_name',
+        'tax_code',
         'discount_amount',
         'line_base',
         'tax_amount',
@@ -54,6 +57,11 @@ class SaleLine extends Model
     public function presentation(): BelongsTo
     {
         return $this->belongsTo(ProductPresentation::class, 'product_presentation_id');
+    }
+
+    public function tax(): BelongsTo
+    {
+        return $this->belongsTo(Tax::class);
     }
 
     public function lots(): HasMany

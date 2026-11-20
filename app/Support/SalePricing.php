@@ -2,25 +2,12 @@
 
 namespace App\Support;
 
+use App\Models\Tax;
+
 class SalePricing
 {
-    /** Allowed Colombian IVA rates for POS. */
-    public const TAX_RATES = [0.0, 5.0, 19.0];
-
-    public static function normalizeTaxRate($rate): float
-    {
-        $value = round((float) $rate, 2);
-        foreach (self::TAX_RATES as $allowed) {
-            if (abs($value - $allowed) < 0.001) {
-                return $allowed;
-            }
-        }
-
-        return 19.0;
-    }
-
     /**
-     * Split an IVA-included gross amount into base + tax.
+     * Split a tax-inclusive gross amount into base + tax.
      *
      * @return array{base: float, tax: float}
      */
@@ -70,5 +57,29 @@ class SalePricing
         }
 
         return $allocated;
+    }
+
+    public static function defaultTax(): Tax
+    {
+        $tax = Tax::query()->active()->where('code', 'IVA_19')->first()
+            ?: Tax::query()->active()->orderBy('sort_order')->orderBy('id')->first();
+
+        if (!$tax) {
+            throw new \RuntimeException('No hay impuestos configurados.');
+        }
+
+        return $tax;
+    }
+
+    public static function resolveTax(?int $taxId = null): Tax
+    {
+        if ($taxId) {
+            $tax = Tax::query()->active()->find($taxId);
+            if ($tax) {
+                return $tax;
+            }
+        }
+
+        return self::defaultTax();
     }
 }

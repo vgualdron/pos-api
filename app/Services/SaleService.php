@@ -76,7 +76,7 @@ class SaleService
             $itemsSubtotal = 0.0;
 
             foreach ($lines as $row) {
-                $presentation = ProductPresentation::with('product')->findOrFail($row['product_presentation_id']);
+                $presentation = ProductPresentation::with(['product', 'tax'])->findOrFail($row['product_presentation_id']);
                 $product = $presentation->product;
 
                 if ((int) $product->place_id !== (int) $station->place_id) {
@@ -110,8 +110,9 @@ class SaleService
                     $unitPrice = $requestedPrice;
                 }
 
-                // Tax rate always comes from the presentation catalog (IVA-included shelf price).
-                $taxRate = SalePricing::normalizeTaxRate($presentation->tax_rate ?? 19);
+                // Tax always comes from the presentation catalog (price includes selected tax).
+                $tax = $presentation->tax ?: SalePricing::resolveTax($presentation->tax_id ? (int) $presentation->tax_id : null);
+                $taxRate = round((float) $tax->rate, 2);
                 $lineGross = round($qty * $unitPrice, 2);
                 $itemsSubtotal = round($itemsSubtotal + $lineGross, 2);
 
@@ -122,6 +123,7 @@ class SaleService
                     'factor' => $factor,
                     'qty_base' => $qtyBase,
                     'unit_price' => $unitPrice,
+                    'tax' => $tax,
                     'tax_rate' => $taxRate,
                     'line_gross' => $lineGross,
                 ];
@@ -159,6 +161,7 @@ class SaleService
                 $linePayable = round(max(0, $row['line_gross'] - $lineDiscount), 2);
                 $split = SalePricing::splitGross($linePayable, $row['tax_rate']);
 
+                $tax = $row['tax'];
                 $saleLine = $sale->lines()->create([
                     'product_id' => $row['product']->id,
                     'product_presentation_id' => $row['presentation']->id,
@@ -166,7 +169,10 @@ class SaleService
                     'factor' => $row['factor'],
                     'qty_base' => $row['qty_base'],
                     'unit_price' => $row['unit_price'],
+                    'tax_id' => $tax->id,
                     'tax_rate' => $row['tax_rate'],
+                    'tax_name' => $tax->displayName(),
+                    'tax_code' => $tax->code,
                     'discount_amount' => $lineDiscount,
                     'line_base' => $split['base'],
                     'tax_amount' => $split['tax'],
@@ -223,9 +229,13 @@ class SaleService
         }
 
         $amount = 0.0;
-        if (array_key_exists('discount_amount', $data) && $data['discount_amount'] !== null && $data['discount_amount'] !== '') {
+        $hasAmount = array_key_exists('discount_amount', $data)
+            && $data['discount_amount'] !== null
+            && $data['discount_amount'] !== '';
+        if ($hasAmount) {
             $amount = round((float) $data['discount_amount'], 2);
-        } elseif ($percent !== null) {
+        }
+        if ($amount <= 0 && $percent !== null) {
             $amount = round($itemsSubtotal * ($percent / 100), 2);
         }
 

@@ -20,6 +20,7 @@ use App\Http\Controllers\ProductController;
 use App\Http\Controllers\PurchaseController;
 use App\Http\Controllers\RegisterSessionController;
 use App\Http\Controllers\SaleController;
+use App\Http\Controllers\TaxController;
 
 Route::get('/health', function (Request $request) {
     return 'Health ... active';
@@ -146,6 +147,10 @@ Route::group(['middleware' => ['auth:api'], 'prefix' => '/customers'], function 
 Route::group(['middleware' => ['auth:api'], 'prefix' => '/geo'], function () {
     Route::get('/departments', [GeoController::class, 'departments']);
     Route::get('/municipalities', [GeoController::class, 'municipalities']);
+});
+
+Route::group(['middleware' => ['auth:api'], 'prefix' => '/taxes'], function () {
+    Route::get('/', [TaxController::class, 'index']);
 });
 
 Route::group(['middleware' => ['auth:api'], 'prefix' => '/inventory'], function () {
