@@ -27,8 +27,9 @@ class ProductController extends Controller
     {
         try {
             PlaceScope::assert($request->user(), (int) $place, 'products.allPlaces');
+            $onlyActive = filter_var($request->query('active', false), FILTER_VALIDATE_BOOLEAN);
 
-            return response()->json($this->service->findByPlace((int) $place));
+            return response()->json($this->service->findByPlace((int) $place, $onlyActive));
         } catch (Exception $e) {
             return response()->json(['error' => 'Error al listar productos', 'message' => $e->getMessage()], 400);
         }
