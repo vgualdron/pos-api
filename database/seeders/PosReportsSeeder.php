@@ -46,12 +46,32 @@ SELECT
     NULLIF(TRIM(CONCAT_WS(' ', c.first_name, c.first_last_name, c.second_last_name)), ''),
     'Mostrador'
   ) AS cliente,
-  CASE s.payment_method
-    WHEN 'cash' THEN 'Efectivo'
-    WHEN 'card' THEN 'Tarjeta'
-    WHEN 'transfer' THEN 'Transferencia'
-    ELSE s.payment_method
-  END AS pago,
+  COALESCE(
+    (
+      SELECT GROUP_CONCAT(
+        CONCAT(
+          CASE sp.payment_method
+            WHEN 'cash' THEN 'Efectivo'
+            WHEN 'card' THEN 'Tarjeta'
+            WHEN 'transfer' THEN 'Transferencia'
+            ELSE sp.payment_method
+          END,
+          ' ',
+          FORMAT(sp.amount, 0)
+        )
+        ORDER BY sp.sort_order SEPARATOR ' + '
+      )
+      FROM sale_payments sp
+      WHERE sp.sale_id = s.id
+    ),
+    CASE s.payment_method
+      WHEN 'cash' THEN 'Efectivo'
+      WHEN 'card' THEN 'Tarjeta'
+      WHEN 'transfer' THEN 'Transferencia'
+      WHEN 'mixed' THEN 'Mixto'
+      ELSE s.payment_method
+    END
+  ) AS pago,
   CASE s.status WHEN 'cancelled' THEN 'Anulada' ELSE 'Completada' END AS estado,
   ROUND(s.subtotal, 0) AS subtotal,
   ROUND(s.discount_amount, 0) AS descuento,
@@ -121,19 +141,20 @@ SQL,
                 'sql' => static fn (string $salesWhere): string => <<<SQL
 SELECT
   p.name AS sede,
-  CASE s.payment_method
+  CASE sp.payment_method
     WHEN 'cash' THEN 'Efectivo'
     WHEN 'card' THEN 'Tarjeta'
     WHEN 'transfer' THEN 'Transferencia'
-    ELSE COALESCE(s.payment_method, 'Sin dato')
+    ELSE COALESCE(sp.payment_method, 'Sin dato')
   END AS forma_pago,
-  COUNT(*) AS ventas,
-  ROUND(SUM(s.total), 0) AS total_vendido
-FROM sales s
+  COUNT(DISTINCT s.id) AS ventas,
+  ROUND(SUM(sp.amount), 0) AS total_vendido
+FROM sale_payments sp
+INNER JOIN sales s ON s.id = sp.sale_id
 LEFT JOIN places p ON p.id = s.place_id
 WHERE s.status = 'completed'
   AND {$salesWhere}
-GROUP BY p.name, s.payment_method
+GROUP BY p.name, sp.payment_method
 ORDER BY p.name ASC, total_vendido DESC
 SQL,
             ],

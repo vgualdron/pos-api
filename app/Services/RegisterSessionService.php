@@ -121,7 +121,8 @@ class RegisterSessionService
 
     protected function buildSummary(RegisterSession $session): array
     {
-        $sales = Sale::where('register_session_id', $session->id)
+        $sales = Sale::with('payments')
+            ->where('register_session_id', $session->id)
             ->where('status', Sale::STATUS_COMPLETED)
             ->get();
 
@@ -130,6 +131,22 @@ class RegisterSessionService
         $transfer = 0.0;
 
         foreach ($sales as $sale) {
+            $payments = $sale->payments;
+            if ($payments && $payments->count() > 0) {
+                foreach ($payments as $payment) {
+                    $amount = (float) $payment->amount;
+                    if ($payment->payment_method === Sale::PAYMENT_CARD) {
+                        $card += $amount;
+                    } elseif ($payment->payment_method === Sale::PAYMENT_TRANSFER) {
+                        $transfer += $amount;
+                    } else {
+                        $cash += $amount;
+                    }
+                }
+                continue;
+            }
+
+            // Legacy fallback before sale_payments backfill.
             $total = (float) $sale->total;
             if ($sale->payment_method === Sale::PAYMENT_CARD) {
                 $card += $total;

@@ -14,11 +14,21 @@ class Sale extends Model
     public const PAYMENT_CASH = 'cash';
     public const PAYMENT_CARD = 'card';
     public const PAYMENT_TRANSFER = 'transfer';
+    public const PAYMENT_MIXED = 'mixed';
 
+    /** Tender methods that can appear on sale_payments rows. */
     public const PAYMENT_METHODS = [
         self::PAYMENT_CASH,
         self::PAYMENT_CARD,
         self::PAYMENT_TRANSFER,
+    ];
+
+    /** Values allowed on sales.payment_method (includes mixed summary). */
+    public const PAYMENT_METHOD_LABELS = [
+        self::PAYMENT_CASH,
+        self::PAYMENT_CARD,
+        self::PAYMENT_TRANSFER,
+        self::PAYMENT_MIXED,
     ];
 
     protected $fillable = [
@@ -60,11 +70,16 @@ class Sale extends Model
 
     protected $appends = ['profit'];
 
-    protected $with = ['lines'];
+    protected $with = ['lines', 'payments'];
 
     public function lines(): HasMany
     {
         return $this->hasMany(SaleLine::class);
+    }
+
+    public function payments(): HasMany
+    {
+        return $this->hasMany(SalePayment::class)->orderBy('sort_order')->orderBy('id');
     }
 
     public function station(): BelongsTo

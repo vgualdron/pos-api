@@ -6,6 +6,7 @@ use App\Models\Customer;
 use App\Models\ProductPresentation;
 use App\Models\RegisterSession;
 use App\Models\Sale;
+use App\Models\SalePayment;
 use App\Models\Station;
 use App\Models\StockLot;
 use App\Support\PlaceScope;
@@ -39,7 +40,7 @@ class SaleService
             [$from, $to] = [$to->copy()->startOfDay(), $from->copy()->endOfDay()];
         }
 
-        return Sale::with(['lines.lots', 'station', 'user', 'customer'])
+        return Sale::with(['lines.lots', 'payments', 'station', 'user', 'customer'])
             ->where('place_id', $placeId)
             ->whereBetween('sold_at', [$from, $to])
             ->orderByDesc('sold_at')
@@ -50,7 +51,7 @@ class SaleService
 
     public function find(int $id): Sale
     {
-        return Sale::with(['lines.lots', 'lines.presentation', 'lines.product', 'station', 'user', 'customer'])
+        return Sale::with(['lines.lots', 'lines.presentation', 'lines.product', 'payments', 'station', 'user', 'customer'])
             ->findOrFail($id);
     }
 
@@ -64,14 +65,9 @@ class SaleService
             throw new Exception('La venta necesita al menos un producto.');
         }
 
-        $paymentMethod = $data['payment_method'] ?? Sale::PAYMENT_CASH;
-        if (!in_array($paymentMethod, Sale::PAYMENT_METHODS, true)) {
-            throw new Exception('Método de pago inválido.');
-        }
-
         $customerId = $this->resolveCustomerId($station->place_id, $data['customer_id'] ?? null);
 
-        return DB::transaction(function () use ($station, $user, $session, $lines, $paymentMethod, $data, $customerId) {
+        return DB::transaction(function () use ($station, $user, $session, $lines, $data, $customerId) {
             $prepared = [];
             $itemsSubtotal = 0.0;
 
@@ -148,7 +144,7 @@ class SaleService
                 'total' => 0,
                 'cost_total' => 0,
                 'status' => Sale::STATUS_COMPLETED,
-                'payment_method' => $paymentMethod,
+                'payment_method' => Sale::PAYMENT_CASH,
             ]);
 
             $taxBase = 0.0;
@@ -196,11 +192,19 @@ class SaleService
                 $costTotal += $lineCost;
             }
 
-            [$amountReceived, $changeAmount] = $this->resolvePaymentAmounts(
-                $paymentMethod,
-                $payableTotal,
-                array_key_exists('amount_received', $data) ? (float) $data['amount_received'] : null
+            [$paymentMethod, $payments, $amountReceived, $changeAmount] = $this->resolvePayments(
+                $data,
+                $payableTotal
             );
+
+            foreach ($payments as $payment) {
+                SalePayment::create([
+                    'sale_id' => $sale->id,
+                    'payment_method' => $payment['payment_method'],
+                    'amount' => $payment['amount'],
+                    'sort_order' => $payment['sort_order'],
+                ]);
+            }
 
             $sale->update([
                 'subtotal' => $itemsSubtotal,
@@ -210,11 +214,12 @@ class SaleService
                 'tax_total' => $taxTotal,
                 'total' => $payableTotal,
                 'cost_total' => round($costTotal, 4),
+                'payment_method' => $paymentMethod,
                 'amount_received' => $amountReceived,
                 'change_amount' => $changeAmount,
             ]);
 
-            return $sale->fresh(['lines.lots', 'lines.presentation', 'lines.product', 'station', 'user', 'customer']);
+            return $sale->fresh(['lines.lots', 'lines.presentation', 'lines.product', 'payments', 'station', 'user', 'customer']);
         });
     }
 
@@ -281,7 +286,7 @@ class SaleService
                 'cancel_reason' => $reason ? trim($reason) : null,
             ]);
 
-            return $sale->fresh(['lines.lots', 'lines.presentation', 'lines.product', 'station', 'user', 'customer']);
+            return $sale->fresh(['lines.lots', 'lines.presentation', 'lines.product', 'payments', 'station', 'user', 'customer']);
         });
     }
 
@@ -302,18 +307,81 @@ class SaleService
         return (int) $customer->id;
     }
 
-    protected function resolvePaymentAmounts(string $method, float $total, ?float $amountReceived): array
+    /**
+     * @return array{0:string,1:array<int,array{payment_method:string,amount:float,sort_order:int}>,2:float,3:float}
+     */
+    protected function resolvePayments(array $data, float $total): array
     {
-        if ($method === Sale::PAYMENT_CASH) {
-            $received = $amountReceived ?? $total;
-            if ($received + 0.0001 < $total) {
-                throw new Exception('El monto recibido es menor al total de la venta.');
-            }
+        $total = round($total, 2);
+        $rawPayments = $data['payments'] ?? null;
+        $normalized = [];
 
-            return [round($received, 2), round($received - $total, 2)];
+        if (is_array($rawPayments) && count($rawPayments) > 0) {
+            foreach ($rawPayments as $row) {
+                $method = $row['payment_method'] ?? null;
+                $amount = round((float) ($row['amount'] ?? 0), 2);
+                if ($amount <= 0) {
+                    continue;
+                }
+                if (!in_array($method, Sale::PAYMENT_METHODS, true)) {
+                    throw new Exception('Método de pago inválido.');
+                }
+                $normalized[$method] = round(($normalized[$method] ?? 0) + $amount, 2);
+            }
+        } else {
+            $method = $data['payment_method'] ?? Sale::PAYMENT_CASH;
+            if (!in_array($method, Sale::PAYMENT_METHODS, true)) {
+                throw new Exception('Método de pago inválido.');
+            }
+            $normalized[$method] = $total;
         }
 
-        return [round($total, 2), 0.0];
+        if (!$normalized) {
+            throw new Exception('La venta necesita al menos un pago.');
+        }
+
+        $payments = [];
+        $sum = 0.0;
+        $order = 1;
+        foreach (Sale::PAYMENT_METHODS as $method) {
+            if (!isset($normalized[$method])) {
+                continue;
+            }
+            $amount = round((float) $normalized[$method], 2);
+            $payments[] = [
+                'payment_method' => $method,
+                'amount' => $amount,
+                'sort_order' => $order++,
+            ];
+            $sum = round($sum + $amount, 2);
+        }
+
+        if (abs($sum - $total) > 0.01) {
+            throw new Exception('La suma de los pagos debe ser igual al total de la venta.');
+        }
+
+        $cashPortion = round((float) ($normalized[Sale::PAYMENT_CASH] ?? 0), 2);
+        $hasAmountReceived = array_key_exists('amount_received', $data)
+            && $data['amount_received'] !== null
+            && $data['amount_received'] !== '';
+
+        if ($cashPortion > 0) {
+            $received = $hasAmountReceived ? round((float) $data['amount_received'], 2) : $cashPortion;
+            if ($received + 0.0001 < $cashPortion) {
+                throw new Exception('El efectivo recibido es menor a la parte pagada en efectivo.');
+            }
+
+            $change = round($received - $cashPortion, 2);
+        } else {
+            $received = $total;
+            $change = 0.0;
+        }
+
+        $paymentMethod = count($payments) === 1
+            ? $payments[0]['payment_method']
+            : Sale::PAYMENT_MIXED;
+
+        return [$paymentMethod, $payments, $received, $change];
     }
 
     protected function consumeFifo(

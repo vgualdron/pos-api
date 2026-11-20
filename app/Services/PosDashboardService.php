@@ -39,22 +39,34 @@ class PosDashboardService
         $discountTotal = round((float) (clone $completed)->sum('discount_amount'), 2);
         $taxTotal = round((float) (clone $completed)->sum('tax_total'), 2);
 
-        $byPayment = (clone $completed)
-            ->select('payment_method', DB::raw('COUNT(*) as sales_count'), DB::raw('SUM(total) as sales_total'))
-            ->groupBy('payment_method')
-            ->get()
-            ->mapWithKeys(fn ($row) => [
-                $row->payment_method ?: 'other' => [
-                    'count' => (int) $row->sales_count,
-                    'total' => round((float) $row->sales_total, 2),
-                ],
-            ])
-            ->all();
+        $byPayment = [
+            'cash' => ['count' => 0, 'total' => 0.0],
+            'card' => ['count' => 0, 'total' => 0.0],
+            'transfer' => ['count' => 0, 'total' => 0.0],
+        ];
 
-        foreach (['cash', 'card', 'transfer'] as $method) {
+        $paymentRows = DB::table('sale_payments')
+            ->join('sales', 'sales.id', '=', 'sale_payments.sale_id')
+            ->where('sales.place_id', $placeId)
+            ->where('sales.status', Sale::STATUS_COMPLETED)
+            ->whereBetween('sales.sold_at', [$from, $to])
+            ->select(
+                'sale_payments.payment_method',
+                DB::raw('COUNT(DISTINCT sales.id) as sales_count'),
+                DB::raw('SUM(sale_payments.amount) as sales_total')
+            )
+            ->groupBy('sale_payments.payment_method')
+            ->get();
+
+        foreach ($paymentRows as $row) {
+            $method = $row->payment_method ?: 'other';
             if (!isset($byPayment[$method])) {
                 $byPayment[$method] = ['count' => 0, 'total' => 0.0];
             }
+            $byPayment[$method] = [
+                'count' => (int) $row->sales_count,
+                'total' => round((float) $row->sales_total, 2),
+            ];
         }
 
         $openSessions = RegisterSession::query()
