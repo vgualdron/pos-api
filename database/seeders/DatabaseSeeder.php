@@ -58,6 +58,7 @@ class DatabaseSeeder extends Seeder
 
         $this->call(CorePermissionsSeeder::class);
         $this->call(PosPermissionsSeeder::class);
+        $this->call(PosReportsSeeder::class);
         $this->call(AdminRoleSeeder::class);
 
         $role = Role::where('name', 'ADMINISTRADOR')
