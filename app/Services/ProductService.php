@@ -6,6 +6,7 @@ use App\Models\File;
 use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Models\ProductPresentation;
+use App\Models\StockLot;
 use Exception;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -66,7 +67,9 @@ class ProductService
     {
         return DB::transaction(function () use ($data) {
             $presentations = $data['presentations'] ?? [];
-            unset($data['presentations']);
+            $initialQtyBase = (float) ($data['initial_qty_base'] ?? 0);
+            $initialUnitCost = (float) ($data['initial_unit_cost'] ?? 0);
+            unset($data['presentations'], $data['initial_qty_base'], $data['initial_unit_cost']);
 
             if (empty($data['sku'])) {
                 $data['sku'] = null;
@@ -80,9 +83,33 @@ class ProductService
 
             $product = Product::create($data);
             $this->syncPresentations($product, $presentations);
+            $this->createOpeningLot($product, $initialQtyBase, $initialUnitCost);
 
             return $this->find($product->id);
         });
+    }
+
+    /**
+     * Opening inventory when the business already has stock (no purchase document).
+     */
+    protected function createOpeningLot(Product $product, float $qtyBase, float $unitCost = 0): void
+    {
+        $qtyBase = round($qtyBase, 4);
+        if ($qtyBase <= 0) {
+            return;
+        }
+
+        StockLot::create([
+            'place_id' => $product->place_id,
+            'product_id' => $product->id,
+            'purchase_id' => null,
+            'lot_code' => 'OPENING-'.$product->id,
+            'purchased_at' => now(),
+            'expires_at' => null,
+            'unit_cost' => round(max(0, $unitCost), 4),
+            'qty_initial' => $qtyBase,
+            'qty_remaining' => $qtyBase,
+        ]);
     }
 
     public function update($id, array $data): Product

@@ -59,6 +59,9 @@ class ProductController extends Controller
                 'base_unit_name' => 'required|string|max:40',
                 'min_stock' => 'nullable|numeric|min:0',
                 'status' => 'nullable|string|max:20',
+                // Opening inventory for businesses that already have stock (no purchase yet).
+                'initial_qty_base' => 'nullable|numeric|min:0',
+                'initial_unit_cost' => 'nullable|numeric|min:0',
                 'presentations' => 'required|array|min:1',
                 'presentations.*.id' => 'nullable|integer',
                 'presentations.*.name' => 'required|string|max:80',
