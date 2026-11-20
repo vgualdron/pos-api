@@ -110,11 +110,8 @@ class SaleService
                     $unitPrice = $requestedPrice;
                 }
 
-                $taxRate = SalePricing::normalizeTaxRate(
-                    array_key_exists('tax_rate', $row) && $row['tax_rate'] !== null && $row['tax_rate'] !== ''
-                        ? $row['tax_rate']
-                        : ($presentation->tax_rate ?? 19)
-                );
+                // Tax rate always comes from the presentation catalog (IVA-included shelf price).
+                $taxRate = SalePricing::normalizeTaxRate($presentation->tax_rate ?? 19);
                 $lineGross = round($qty * $unitPrice, 2);
                 $itemsSubtotal = round($itemsSubtotal + $lineGross, 2);
 
