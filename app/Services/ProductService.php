@@ -112,6 +112,7 @@ class ProductService
                 'name' => $row['name'] ?? '',
                 'factor' => $factor,
                 'sale_price' => (float) ($row['sale_price'] ?? 0),
+                'tax_rate' => \App\Support\SalePricing::normalizeTaxRate($row['tax_rate'] ?? 19),
                 'barcode' => $row['barcode'] ?? null,
                 'is_default' => (bool) ($row['is_default'] ?? false),
                 'status' => $row['status'] ?? 'activo',

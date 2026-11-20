@@ -12,6 +12,7 @@ class ProductPresentation extends Model
         'name',
         'factor',
         'sale_price',
+        'tax_rate',
         'barcode',
         'is_default',
         'status',
@@ -20,6 +21,7 @@ class ProductPresentation extends Model
     protected $casts = [
         'factor' => 'float',
         'sale_price' => 'float',
+        'tax_rate' => 'float',
         'is_default' => 'boolean',
     ];
 

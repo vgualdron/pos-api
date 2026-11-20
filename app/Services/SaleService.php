@@ -10,6 +10,7 @@ use App\Models\Station;
 use App\Models\StockLot;
 use App\Support\PlaceScope;
 use App\Support\PosStation;
+use App\Support\SalePricing;
 use Carbon\Carbon;
 use Exception;
 use Illuminate\Support\Facades\DB;
@@ -71,22 +72,8 @@ class SaleService
         $customerId = $this->resolveCustomerId($station->place_id, $data['customer_id'] ?? null);
 
         return DB::transaction(function () use ($station, $user, $session, $lines, $paymentMethod, $data, $customerId) {
-            $sale = Sale::create([
-                'place_id' => $station->place_id,
-                'station_id' => $station->id,
-                'user_id' => $user->id,
-                'customer_id' => $customerId,
-                'register_session_id' => $session->id,
-                'sold_at' => Carbon::now(),
-                'subtotal' => 0,
-                'total' => 0,
-                'cost_total' => 0,
-                'status' => Sale::STATUS_COMPLETED,
-                'payment_method' => $paymentMethod,
-            ]);
-
-            $subtotal = 0;
-            $costTotal = 0;
+            $prepared = [];
+            $itemsSubtotal = 0.0;
 
             foreach ($lines as $row) {
                 $presentation = ProductPresentation::with('product')->findOrFail($row['product_presentation_id']);
@@ -123,43 +110,102 @@ class SaleService
                     $unitPrice = $requestedPrice;
                 }
 
-                $lineTotal = round($qty * $unitPrice, 2);
+                $taxRate = SalePricing::normalizeTaxRate(
+                    array_key_exists('tax_rate', $row) && $row['tax_rate'] !== null && $row['tax_rate'] !== ''
+                        ? $row['tax_rate']
+                        : ($presentation->tax_rate ?? 19)
+                );
+                $lineGross = round($qty * $unitPrice, 2);
+                $itemsSubtotal = round($itemsSubtotal + $lineGross, 2);
 
-                $saleLine = $sale->lines()->create([
-                    'product_id' => $product->id,
-                    'product_presentation_id' => $presentation->id,
+                $prepared[] = [
+                    'product' => $product,
+                    'presentation' => $presentation,
                     'qty' => $qty,
                     'factor' => $factor,
                     'qty_base' => $qtyBase,
                     'unit_price' => $unitPrice,
-                    'line_total' => $lineTotal,
+                    'tax_rate' => $taxRate,
+                    'line_gross' => $lineGross,
+                ];
+            }
+
+            [$discountAmount, $discountPercent] = $this->resolveDiscount($data, $itemsSubtotal);
+            $lineGrosses = array_map(fn ($row) => $row['line_gross'], $prepared);
+            $allocatedDiscounts = SalePricing::allocateDiscount($lineGrosses, $discountAmount);
+
+            $sale = Sale::create([
+                'place_id' => $station->place_id,
+                'station_id' => $station->id,
+                'user_id' => $user->id,
+                'customer_id' => $customerId,
+                'register_session_id' => $session->id,
+                'sold_at' => Carbon::now(),
+                'subtotal' => $itemsSubtotal,
+                'discount_amount' => $discountAmount,
+                'discount_percent' => $discountPercent,
+                'tax_base' => 0,
+                'tax_total' => 0,
+                'total' => 0,
+                'cost_total' => 0,
+                'status' => Sale::STATUS_COMPLETED,
+                'payment_method' => $paymentMethod,
+            ]);
+
+            $taxBase = 0.0;
+            $taxTotal = 0.0;
+            $payableTotal = 0.0;
+            $costTotal = 0.0;
+
+            foreach ($prepared as $index => $row) {
+                $lineDiscount = round((float) ($allocatedDiscounts[$index] ?? 0), 2);
+                $linePayable = round(max(0, $row['line_gross'] - $lineDiscount), 2);
+                $split = SalePricing::splitGross($linePayable, $row['tax_rate']);
+
+                $saleLine = $sale->lines()->create([
+                    'product_id' => $row['product']->id,
+                    'product_presentation_id' => $row['presentation']->id,
+                    'qty' => $row['qty'],
+                    'factor' => $row['factor'],
+                    'qty_base' => $row['qty_base'],
+                    'unit_price' => $row['unit_price'],
+                    'tax_rate' => $row['tax_rate'],
+                    'discount_amount' => $lineDiscount,
+                    'line_base' => $split['base'],
+                    'tax_amount' => $split['tax'],
+                    'line_total' => $linePayable,
                     'cost_total' => 0,
                 ]);
 
                 $lineCost = $this->consumeFifo(
                     (int) $station->place_id,
-                    (int) $product->id,
-                    $qtyBase,
+                    (int) $row['product']->id,
+                    $row['qty_base'],
                     $saleLine->id,
-                    $product->name,
-                    $presentation->name
+                    $row['product']->name,
+                    $row['presentation']->name
                 );
 
                 $saleLine->update(['cost_total' => $lineCost]);
-                $subtotal += $lineTotal;
+                $taxBase = round($taxBase + $split['base'], 2);
+                $taxTotal = round($taxTotal + $split['tax'], 2);
+                $payableTotal = round($payableTotal + $linePayable, 2);
                 $costTotal += $lineCost;
             }
 
-            $total = round($subtotal, 2);
             [$amountReceived, $changeAmount] = $this->resolvePaymentAmounts(
                 $paymentMethod,
-                $total,
+                $payableTotal,
                 array_key_exists('amount_received', $data) ? (float) $data['amount_received'] : null
             );
 
             $sale->update([
-                'subtotal' => $total,
-                'total' => $total,
+                'subtotal' => $itemsSubtotal,
+                'discount_amount' => $discountAmount,
+                'discount_percent' => $discountPercent,
+                'tax_base' => $taxBase,
+                'tax_total' => $taxTotal,
+                'total' => $payableTotal,
                 'cost_total' => round($costTotal, 4),
                 'amount_received' => $amountReceived,
                 'change_amount' => $changeAmount,
@@ -167,6 +213,37 @@ class SaleService
 
             return $sale->fresh(['lines.lots', 'lines.presentation', 'lines.product', 'station', 'user', 'customer']);
         });
+    }
+
+    protected function resolveDiscount(array $data, float $itemsSubtotal): array
+    {
+        $percent = null;
+        if (array_key_exists('discount_percent', $data) && $data['discount_percent'] !== null && $data['discount_percent'] !== '') {
+            $percent = round((float) $data['discount_percent'], 2);
+            if ($percent < 0 || $percent > 100) {
+                throw new Exception('El porcentaje de descuento debe estar entre 0 y 100.');
+            }
+        }
+
+        $amount = 0.0;
+        if (array_key_exists('discount_amount', $data) && $data['discount_amount'] !== null && $data['discount_amount'] !== '') {
+            $amount = round((float) $data['discount_amount'], 2);
+        } elseif ($percent !== null) {
+            $amount = round($itemsSubtotal * ($percent / 100), 2);
+        }
+
+        if ($amount < 0) {
+            throw new Exception('El descuento no puede ser negativo.');
+        }
+        if ($amount - $itemsSubtotal > 0.0001) {
+            throw new Exception('El descuento no puede ser mayor al subtotal.');
+        }
+
+        if ($percent === null && $itemsSubtotal > 0 && $amount > 0) {
+            $percent = round(($amount / $itemsSubtotal) * 100, 2);
+        }
+
+        return [round($amount, 2), $percent];
     }
 
     public function cancel($user, int $saleId, ?string $reason = null): Sale

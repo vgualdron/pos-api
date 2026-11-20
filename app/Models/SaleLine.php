@@ -16,6 +16,10 @@ class SaleLine extends Model
         'factor',
         'qty_base',
         'unit_price',
+        'tax_rate',
+        'discount_amount',
+        'line_base',
+        'tax_amount',
         'line_total',
         'cost_total',
     ];
@@ -25,6 +29,10 @@ class SaleLine extends Model
         'factor' => 'float',
         'qty_base' => 'float',
         'unit_price' => 'float',
+        'tax_rate' => 'float',
+        'discount_amount' => 'float',
+        'line_base' => 'float',
+        'tax_amount' => 'float',
         'line_total' => 'float',
         'cost_total' => 'float',
     ];
