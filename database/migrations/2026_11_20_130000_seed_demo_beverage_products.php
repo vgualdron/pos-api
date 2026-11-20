@@ -71,6 +71,7 @@ return new class extends Migration
 
                 $this->syncPresentations($productId, $item['presentations'], $taxId, $taxRate, $now);
                 $this->attachImage($productId, $item['image']);
+                $this->ensureStock($placeId, $productId, $item, $now);
             }
         }
     }
@@ -100,6 +101,13 @@ return new class extends Migration
             DB::table('product_favorites')->whereIn('product_id', $productIds->all())->delete();
         }
 
+        if (Schema::hasTable('stock_lots')) {
+            DB::table('stock_lots')
+                ->whereIn('product_id', $productIds->all())
+                ->where('lot_code', 'like', 'SEED-%')
+                ->delete();
+        }
+
         DB::table('products')->whereIn('id', $productIds->all())->delete();
     }
 
@@ -112,6 +120,8 @@ return new class extends Migration
                 'barcode' => '7702090023400',
                 'base_unit_name' => 'botella',
                 'min_stock' => 12,
+                'initial_stock' => 120,
+                'unit_cost' => 1800,
                 'category_key' => 'gaseosas',
                 'image' => 'colombiana-400.webp',
                 'presentations' => [
@@ -126,6 +136,8 @@ return new class extends Migration
                 'barcode' => '7702535012181',
                 'base_unit_name' => 'botella',
                 'min_stock' => 12,
+                'initial_stock' => 120,
+                'unit_cost' => 1900,
                 'category_key' => 'gaseosas',
                 'image' => 'coca-cola-400.jpg',
                 'presentations' => [
@@ -140,6 +152,8 @@ return new class extends Migration
                 'barcode' => '7702004001234',
                 'base_unit_name' => 'lata',
                 'min_stock' => 24,
+                'initial_stock' => 240,
+                'unit_cost' => 2200,
                 'category_key' => 'cervezas',
                 'image' => 'aguila-lata.webp',
                 'presentations' => [
@@ -221,6 +235,51 @@ return new class extends Migration
                 ]));
             }
         }
+    }
+
+    protected function ensureStock(int $placeId, int $productId, array $item, $now): void
+    {
+        if (!Schema::hasTable('stock_lots')) {
+            return;
+        }
+
+        $lotCode = 'SEED-'.$item['sku'];
+        $qty = (float) ($item['initial_stock'] ?? 0);
+        $unitCost = (float) ($item['unit_cost'] ?? 0);
+        if ($qty <= 0) {
+            return;
+        }
+
+        $existing = DB::table('stock_lots')
+            ->where('place_id', $placeId)
+            ->where('product_id', $productId)
+            ->where('lot_code', $lotCode)
+            ->first();
+
+        $payload = [
+            'purchased_at' => $now,
+            'unit_cost' => $unitCost,
+            'qty_initial' => $qty,
+            'qty_remaining' => $qty,
+            'updated_at' => $now,
+        ];
+
+        if ($existing) {
+            // Only refill when the seed lot was never sold down.
+            if ((float) $existing->qty_remaining <= 0 || (float) $existing->qty_remaining === (float) $existing->qty_initial) {
+                DB::table('stock_lots')->where('id', $existing->id)->update($payload);
+            }
+            return;
+        }
+
+        DB::table('stock_lots')->insert(array_merge($payload, [
+            'place_id' => $placeId,
+            'product_id' => $productId,
+            'purchase_id' => null,
+            'lot_code' => $lotCode,
+            'expires_at' => null,
+            'created_at' => $now,
+        ]));
     }
 
     protected function attachImage(int $productId, string $fileName): void
