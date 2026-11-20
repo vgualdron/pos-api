@@ -9,14 +9,32 @@ class PosReportsSeeder extends Seeder
 {
     public function run(): void
     {
-        $reports = [
+        Report::query()->where('name', 'like', 'POS · %')->delete();
+
+        $periods = [
+            'actual' => [
+                'label' => 'mes actual',
+                'sales' => "s.sold_at >= DATE_FORMAT(CURDATE(), '%Y-%m-01')
+  AND s.sold_at < DATE_FORMAT(DATE_ADD(CURDATE(), INTERVAL 1 MONTH), '%Y-%m-01')",
+                'sessions' => "rs.closed_at >= DATE_FORMAT(CURDATE(), '%Y-%m-01')
+  AND rs.closed_at < DATE_FORMAT(DATE_ADD(CURDATE(), INTERVAL 1 MONTH), '%Y-%m-01')",
+            ],
+            'previous' => [
+                'label' => 'mes anterior',
+                'sales' => "s.sold_at >= DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 1 MONTH), '%Y-%m-01')
+  AND s.sold_at < DATE_FORMAT(CURDATE(), '%Y-%m-01')",
+                'sessions' => "rs.closed_at >= DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 1 MONTH), '%Y-%m-01')
+  AND rs.closed_at < DATE_FORMAT(CURDATE(), '%Y-%m-01')",
+            ],
+        ];
+
+        $templates = [
             [
-                'name' => 'POS · Ventas del día',
-                'order' => 10,
-                'permission' => 'reports.list',
+                'base_order' => 10,
+                'title' => 'Ventas',
                 'background' => '#E8F1F8',
                 'color' => '#2A4F73',
-                'sql' => <<<'SQL'
+                'sql' => static fn (string $salesWhere): string => <<<SQL
 SELECT
   s.id AS venta,
   DATE_FORMAT(s.sold_at, '%Y-%m-%d %H:%i') AS fecha,
@@ -45,17 +63,16 @@ LEFT JOIN places p ON p.id = s.place_id
 LEFT JOIN stations st ON st.id = s.station_id
 LEFT JOIN users u ON u.id = s.user_id
 LEFT JOIN customers c ON c.id = s.customer_id
-WHERE DATE(s.sold_at) = CURDATE()
+WHERE {$salesWhere}
 ORDER BY s.sold_at DESC, s.id DESC
 SQL,
             ],
             [
-                'name' => 'POS · Ventas por producto (7 días)',
-                'order' => 20,
-                'permission' => 'reports.list',
+                'base_order' => 20,
+                'title' => 'Ventas por producto',
                 'background' => '#EEF8F0',
                 'color' => '#1B5E20',
-                'sql' => <<<'SQL'
+                'sql' => static fn (string $salesWhere): string => <<<SQL
 SELECT
   p.name AS sede,
   pr.name AS producto,
@@ -70,18 +87,17 @@ INNER JOIN products pr ON pr.id = sl.product_id
 LEFT JOIN product_presentations pp ON pp.id = sl.product_presentation_id
 LEFT JOIN places p ON p.id = s.place_id
 WHERE s.status = 'completed'
-  AND s.sold_at >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)
+  AND {$salesWhere}
 GROUP BY p.name, pr.name, pp.name
 ORDER BY total_vendido DESC, producto ASC
 SQL,
             ],
             [
-                'name' => 'POS · Ventas por cajero (7 días)',
-                'order' => 30,
-                'permission' => 'reports.list',
+                'base_order' => 30,
+                'title' => 'Ventas por cajero',
                 'background' => '#FFF8E7',
                 'color' => '#8A5A00',
-                'sql' => <<<'SQL'
+                'sql' => static fn (string $salesWhere): string => <<<SQL
 SELECT
   p.name AS sede,
   u.name AS cajero,
@@ -92,18 +108,17 @@ SELECT
 FROM sales s
 LEFT JOIN places p ON p.id = s.place_id
 LEFT JOIN users u ON u.id = s.user_id
-WHERE s.sold_at >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)
+WHERE {$salesWhere}
 GROUP BY p.name, u.name
 ORDER BY total_vendido DESC, cajero ASC
 SQL,
             ],
             [
-                'name' => 'POS · Ventas por forma de pago (7 días)',
-                'order' => 40,
-                'permission' => 'reports.list',
+                'base_order' => 40,
+                'title' => 'Ventas por forma de pago',
                 'background' => '#F3EEF9',
                 'color' => '#5E35B1',
-                'sql' => <<<'SQL'
+                'sql' => static fn (string $salesWhere): string => <<<SQL
 SELECT
   p.name AS sede,
   CASE s.payment_method
@@ -117,18 +132,17 @@ SELECT
 FROM sales s
 LEFT JOIN places p ON p.id = s.place_id
 WHERE s.status = 'completed'
-  AND s.sold_at >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)
+  AND {$salesWhere}
 GROUP BY p.name, s.payment_method
 ORDER BY p.name ASC, total_vendido DESC
 SQL,
             ],
             [
-                'name' => 'POS · Cierres de caja (7 días)',
-                'order' => 50,
-                'permission' => 'reports.list',
+                'base_order' => 50,
+                'title' => 'Cierres de caja',
                 'background' => '#E8F5F5',
                 'color' => '#00695C',
-                'sql' => <<<'SQL'
+                'sql' => static fn (string $salesWhere, string $sessionsWhere): string => <<<SQL
 SELECT
   p.name AS sede,
   st.name AS caja,
@@ -151,17 +165,16 @@ LEFT JOIN places p ON p.id = rs.place_id
 LEFT JOIN stations st ON st.id = rs.station_id
 LEFT JOIN users u ON u.id = rs.user_id
 WHERE rs.status = 'closed'
-  AND rs.closed_at >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)
+  AND {$sessionsWhere}
 ORDER BY rs.closed_at DESC
 SQL,
             ],
             [
-                'name' => 'POS · Top productos (30 días)',
-                'order' => 60,
-                'permission' => 'reports.list',
+                'base_order' => 60,
+                'title' => 'Top productos',
                 'background' => '#FDECEE',
                 'color' => '#B71C1C',
-                'sql' => <<<'SQL'
+                'sql' => static fn (string $salesWhere): string => <<<SQL
 SELECT
   p.name AS sede,
   pr.name AS producto,
@@ -173,7 +186,7 @@ INNER JOIN sales s ON s.id = sl.sale_id
 INNER JOIN products pr ON pr.id = sl.product_id
 LEFT JOIN places p ON p.id = s.place_id
 WHERE s.status = 'completed'
-  AND s.sold_at >= DATE_SUB(CURDATE(), INTERVAL 29 DAY)
+  AND {$salesWhere}
 GROUP BY p.name, pr.name
 ORDER BY total_vendido DESC
 LIMIT 50
@@ -181,17 +194,25 @@ SQL,
             ],
         ];
 
-        foreach ($reports as $row) {
-            Report::updateOrCreate(
-                ['name' => $row['name']],
-                [
-                    'sql' => $row['sql'],
-                    'order' => $row['order'],
-                    'permission' => $row['permission'],
-                    'background' => $row['background'],
-                    'color' => $row['color'],
-                ]
-            );
+        foreach ($templates as $template) {
+            $offset = 0;
+            foreach ($periods as $period) {
+                $sqlBuilder = $template['sql'];
+                $sql = $sqlBuilder($period['sales'], $period['sessions']);
+
+                Report::updateOrCreate(
+                    ['name' => "POS · {$template['title']} ({$period['label']})"],
+                    [
+                        'sql' => $sql,
+                        'order' => $template['base_order'] + $offset,
+                        'permission' => 'reports.list',
+                        'background' => $template['background'],
+                        'color' => $template['color'],
+                    ]
+                );
+
+                $offset++;
+            }
         }
     }
 }
