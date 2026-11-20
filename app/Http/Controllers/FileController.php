@@ -7,100 +7,71 @@ use Exception;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Response;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
-use Throwable;
+use Carbon\Carbon;
 
 class FileController extends Controller
 {
     public function create(Request $request)
     {
-        $path = '';
-        $pathS3 = '';
-        $item = null;
+        $url = "";
 
         try {
             $userSesion = $request->user();
             $idUserSesion = $userSesion->id;
-            $name = (string) $request->name;
-            $modelName = (string) $request->modelName;
+            $name = $request->name;
+            $modelName = $request->modelName;
             $modelId = $request->modelId;
 
             $type = $request->type;
             $extension = $request->extension;
-            $storage = (string) $request->storage;
+            $storage = $request->storage;
             $state = $request->status;
             $latitude = $request->latitude;
             $longitude = $request->longitude;
-            $maintainFile = $request->boolean('maintain');
+            $maintainFile = $request->maintain;
+            $item = null;
 
-            if (!$name || !$storage || !$modelName || $modelId === null || $modelId === '') {
-                throw new Exception('Faltan datos del archivo (name, storage, modelName, modelId).');
-            }
-
+            // Crear un nombre aleatorio para la imagen
+            $time = strtotime("now");
             if (!$extension && $request->hasFile('upload')) {
                 $extension = $request->file('upload')->getClientOriginalExtension();
             }
-            $extension = ltrim(strtolower((string) $extension), '.');
-            if ($extension === '') {
-                $extension = 'jpg';
-            }
+            $nameComplete = $name."-".$time.".".$extension;
+            $pathS3 = "$storage/$modelId/$nameComplete";
+            $path = "$modelId/$nameComplete";
 
-            // Stable name: DB url always matches the file on disk.
-            $nameComplete = $name.'.'.$extension;
-            $path = $modelId.'/'.$nameComplete;
-            $pathS3 = $storage.'/'.$path;
-            $disk = Storage::disk($storage);
+            Storage::disk($storage)->makeDirectory((string) $modelId);
 
-            $disk->makeDirectory((string) $modelId);
-
-            if (!$maintainFile) {
-                $previous = File::query()
-                    ->where('name', $name)
-                    ->where('model_id', $modelId)
-                    ->where('model_name', $modelName)
-                    ->get();
-
-                foreach ($previous as $old) {
-                    try {
-                        $this->deleteStoredFile($old, $storage);
-                    } catch (Throwable $cleanupError) {
-                        // Cleanup must not block a new upload.
-                    }
-                    $old->delete();
-                }
-
-                // Overwrite stable path and best-effort remove legacy timestamped copies.
-                try {
-                    if ($disk->exists($path)) {
-                        $disk->delete($path);
-                    }
-                    foreach ($disk->files((string) $modelId) as $existing) {
-                        $base = basename((string) $existing);
-                        if ($base !== $nameComplete && str_starts_with($base, $name.'-')) {
-                            $disk->delete($existing);
-                        }
-                    }
-                } catch (Throwable $cleanupError) {
-                    // Ignore listing/delete issues on some hosts; put() will overwrite.
-                }
-            }
-
+            // Multipart (videos/archivos grandes) o base64 (flujo legacy de imágenes)
             if ($request->hasFile('upload')) {
                 $uploaded = $request->file('upload');
                 if (!$uploaded->isValid()) {
                     throw new Exception('El archivo subido no es válido (posible límite del servidor).');
                 }
-                $written = $disk->put($path, fopen($uploaded->getRealPath(), 'r'));
+                $status = Storage::disk($storage)->put($path, fopen($uploaded->getRealPath(), 'r'));
             } else {
                 $file = $request->input('file');
                 if (!$file) {
                     throw new Exception('No se recibió el archivo.');
                 }
-                $written = $disk->put($path, base64_decode($file));
+                $status = Storage::disk($storage)->put($path, base64_decode($file));
             }
 
-            if ($written === false) {
-                throw new Exception('No se pudo guardar el archivo en almacenamiento.');
+            /* if ($status) {
+                // Para disco público (ej: S3 con bucket público o local/public)
+                $url = Storage::disk($storage)->url($path);
+
+                // Si es privado, puedes generar un signed URL con tiempo de expiración
+                // $url = Storage::disk($storage)->temporaryUrl($path, now()->addMinutes(5));
+            } */
+
+            if (!$maintainFile) {
+                File::where('name', $name)
+                    ->where('model_id', $modelId)
+                    ->where('model_name', $modelName)
+                    ->delete();
             }
 
             $item = File::create([
@@ -116,31 +87,30 @@ class FileController extends Controller
                 'latitude' => $latitude,
                 'longitude' => $longitude,
             ]);
-        } catch (Throwable $e) {
+
+        } catch (Exception $e) {
             return response()->json([
                 'message' => [
                     [
                         'text' => 'Se ha presentado un error',
-                        'detail' => $e->getMessage(),
-                    ],
-                ],
+                        'detail' => $e->getMessage()
+                    ]
+                ]
             ], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
 
         return response()->json([
-            'message' => [
-                [
-                    'text' => 'Imagen guardada',
-                    'detail' => $pathS3 ?? $path,
-                ],
-            ],
+            'message' =>  $path,
             'data' => $item,
         ], Response::HTTP_OK);
+
     }
 
     public function get(Request $request)
     {
         try {
+            $userSesion = $request->user();
+            $idUserSesion = $userSesion->id;
             $name = $request->name;
             $modelName = $request->modelName;
             $modelId = $request->modelId;
@@ -149,33 +119,37 @@ class FileController extends Controller
                 ->where('model_id', $modelId)
                 ->where('model_name', $modelName)
                 ->first();
+
+            /* if ($item) { solo para url temparales de S3
+                $item->urlS3 = Storage::disk($modelName)->temporaryUrl($item->url, Carbon::now()->addHour());
+            } */
+
         } catch (Exception $e) {
             return response()->json([
                 'data' => [],
-                'message' => $e->getMessage(),
+                'message'=>$e->getMessage()
             ], JsonResponse::HTTP_INTERNAL_SERVER_ERROR);
         }
 
         return response()->json([
             'data' => $item,
-            'message' => 'Succeed',
+            'message' => 'Succeed'
         ], JsonResponse::HTTP_OK);
     }
 
-    public function update(Request $request, int $id)
-    {
+    function update(Request $request, int $id) {
         try {
             $item = File::find($id)->update($request->all());
         } catch (Exception $e) {
             return response()->json([
                 'data' => [],
-                'message' => $e->getMessage(),
+                'message'=>$e->getMessage()
             ], JsonResponse::HTTP_INTERNAL_SERVER_ERROR);
         }
 
         return response()->json([
             'data' => $item,
-            'message' => 'Succeed',
+            'message' => 'Succeed'
         ], JsonResponse::HTTP_OK);
     }
 
@@ -183,75 +157,62 @@ class FileController extends Controller
     {
         try {
             $item = File::findOrFail($id);
-            $this->deleteStoredFile($item);
+
+            // Determina el disco desde model_name
+            $disk = $item->model_name ?? 'public'; // fallback a 'public' si no existe
+
+            // Obtiene la ruta relativa dentro del disco (quita /storage/app/public/)
+            $relativePath = str_replace('/storage/app/public/' . $disk . '/', '', $item->url);
+            echo $relativePath . '<br>';
+            echo $disk . '<br>';
+            echo Storage::disk($disk)->exists($relativePath);
+            // Verifica y elimina el archivo físico
+            if ($relativePath && Storage::disk($disk)->exists($relativePath)) {
+                echo 'entroooooooo';
+                Storage::disk($disk)->delete($relativePath);
+            }
+
+            // Elimina el registro en base de datos
             $deleted = $item->delete();
+
         } catch (Exception $e) {
             return response()->json([
                 'data' => [],
-                'message' => $e->getMessage(),
+                'message' => $e->getMessage()
             ], JsonResponse::HTTP_INTERNAL_SERVER_ERROR);
         }
 
         return response()->json([
             'data' => $deleted,
-            'message' => 'Succeed',
+            'message' => 'Succeed'
         ], JsonResponse::HTTP_OK);
-    }
-
-    /**
-     * DB url is "{disk}/{modelId}/{filename}"; disk root is already .../public/{disk}.
-     */
-    protected function deleteStoredFile(File $item, ?string $preferredDisk = null): void
-    {
-        $relativePath = ltrim(str_replace('\\', '/', (string) $item->url), '/');
-        if ($relativePath === '') {
-            return;
-        }
-
-        $diskName = $preferredDisk ?: ($item->model_name ?: 'public');
-        $prefix = $diskName.'/';
-        if (str_starts_with($relativePath, $prefix)) {
-            $relativePath = substr($relativePath, strlen($prefix));
-        } else {
-            // url like "products/5/file.jpg" while preferred disk unknown: use first segment as disk.
-            $parts = explode('/', $relativePath, 2);
-            if (count($parts) === 2 && $parts[0] !== '' && $parts[1] !== '') {
-                $diskName = $parts[0];
-                $relativePath = $parts[1];
-            }
-        }
-
-        $relativePath = ltrim($relativePath, '/');
-        if ($relativePath === '') {
-            return;
-        }
-
-        $disk = Storage::disk($diskName);
-        if ($disk->exists($relativePath)) {
-            $disk->delete($relativePath);
-        }
     }
 
     public function downloadImageFromUrl(Request $request)
     {
+        // Obtener el contenido de la imagen desde la URL
         $imageUrl = $request->query('imageUrl');
         $route = $request->query('route');
         $date = $request->query('date');
 
+        // Validamos que la URL no esté vacía
         if (!$imageUrl) {
             return response()->json(['error' => 'URL de la imagen no proporcionada'], 400);
         }
 
         $imageContent = file_get_contents($imageUrl);
 
+        // Verifica si se pudo obtener el contenido
         if ($imageContent === false) {
             return response()->json(['error' => 'No se pudo obtener la imagen'], 404);
         }
 
+        // Extraer el nombre del archivo de la URL
         $fileName = basename($imageUrl);
 
+        // Crear una respuesta de descarga con el contenido de la imagen
         return response($imageContent, 200)
-            ->header('Content-Type', 'image/jpeg')
-            ->header('Content-Disposition', 'attachment; filename="'.$route.' - '.$date.' - '.$fileName.'"');
+            ->header('Content-Type', 'image/jpeg')  // Ajusta el tipo de contenido según el tipo de imagen
+            ->header('Content-Disposition', 'attachment; filename="' . $route . ' - '. $date . ' - '. $fileName . '"');
     }
 }
