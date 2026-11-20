@@ -19,7 +19,7 @@ return [
 
     'allowed_methods' => ['*'],
 
-    'allowed_origins' => ['http://192.168.101.5:9000', 'http://localhost:9000', 'http://localhost:8080', 'https://www.progresando.co', 'https://turno.progresando.co'],
+    'allowed_origins' => ['http://localhost:9000', 'http://localhost:8080', 'https://pos.jflingenieria.com'],
 
     'allowed_origins_patterns' => [],
 
