@@ -54,6 +54,14 @@ class CompanyElectronicInvoiceSetting extends Model
 
     public function baseUrl(): string
     {
-        return rtrim((string) $this->api_url, '/');
+        $url = trim((string) $this->api_url);
+        $url = rtrim($url, '/');
+        // Allow pasting full endpoint URLs by mistake
+        $url = preg_replace('#/oauth/token$#i', '', $url) ?? $url;
+        $url = preg_replace('#/v2(?:/.*)?$#i', '', $url) ?? $url;
+        $url = rtrim($url, '/');
+
+        return $url;
     }
 }
+

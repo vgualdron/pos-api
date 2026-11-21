@@ -39,19 +39,23 @@ class ElectronicInvoiceSettingService
 
             $settings = CompanyElectronicInvoiceSetting::query()->firstOrNew(['company_id' => $companyId]);
             $settings->provider = $companyData['provider'] ?? $settings->provider ?? 'factus';
-            $settings->api_url = rtrim((string) ($companyData['api_url'] ?? $settings->api_url ?? ''), '/');
-            $settings->client_id = $companyData['client_id'] ?? $settings->client_id;
-            $settings->username = $companyData['username'] ?? $settings->username;
+            $settings->api_url = rtrim(trim((string) ($companyData['api_url'] ?? $settings->api_url ?? '')), '/');
+            if (array_key_exists('client_id', $companyData)) {
+                $settings->client_id = trim((string) $companyData['client_id']);
+            }
+            if (array_key_exists('username', $companyData)) {
+                $settings->username = trim((string) $companyData['username']);
+            }
             $settings->is_enabled = (bool) ($companyData['is_enabled'] ?? false);
 
             if (array_key_exists('client_secret', $companyData) && filled($companyData['client_secret'])) {
-                $settings->client_secret = $companyData['client_secret'];
+                $settings->client_secret = trim((string) $companyData['client_secret']);
                 $settings->access_token = null;
                 $settings->token_expires_at = null;
             }
 
             if (array_key_exists('password', $companyData) && filled($companyData['password'])) {
-                $settings->password = $companyData['password'];
+                $settings->password = (string) $companyData['password'];
                 $settings->access_token = null;
                 $settings->token_expires_at = null;
             }
@@ -98,17 +102,6 @@ class ElectronicInvoiceSettingService
 
         try {
             $this->factus->authenticate($settings, true);
-            $ranges = $this->factus->getNumberingRanges($settings);
-
-            $settings->tested_at = now();
-            $settings->last_error = null;
-            $settings->save();
-
-            return [
-                'ok' => true,
-                'tested_at' => optional($settings->tested_at)->toIso8601String(),
-                'numbering_ranges' => $this->mapRanges($ranges),
-            ];
         } catch (Exception $e) {
             $settings->last_error = $e->getMessage();
             $settings->tested_at = now();
@@ -118,6 +111,28 @@ class ElectronicInvoiceSettingService
 
             throw $e;
         }
+
+        try {
+            $ranges = $this->factus->getNumberingRanges($settings);
+        } catch (Exception $e) {
+            $settings->tested_at = now();
+            $settings->last_error = 'Token OK, pero falló al listar rangos: ' . $e->getMessage();
+            $settings->save();
+
+            throw new Exception($settings->last_error);
+        }
+
+        $settings->tested_at = now();
+        $settings->last_error = null;
+        $settings->save();
+
+        return [
+            'ok' => true,
+            'tested_at' => optional($settings->tested_at)->toIso8601String(),
+            'numbering_ranges' => $this->mapRanges($ranges),
+            'api_url_used' => $settings->baseUrl(),
+        ];
+
     }
 
     public function numberingRanges(int $companyId): array

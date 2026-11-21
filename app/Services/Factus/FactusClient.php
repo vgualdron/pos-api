@@ -4,8 +4,11 @@ namespace App\Services\Factus;
 
 use App\Models\CompanyElectronicInvoiceSetting;
 use Exception;
+use Illuminate\Contracts\Encryption\DecryptException;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 class FactusClient
 {
@@ -13,36 +16,63 @@ class FactusClient
     {
         $this->assertCredentials($settings);
 
+        try {
+            $cachedToken = $settings->access_token;
+        } catch (DecryptException $e) {
+            $cachedToken = null;
+            $settings->access_token = null;
+            $settings->token_expires_at = null;
+        }
+
         if (
             ! $force
-            && $settings->access_token
+            && $cachedToken
             && $settings->token_expires_at
             && $settings->token_expires_at->isFuture()
         ) {
-            return $settings->access_token;
+            return $cachedToken;
         }
 
-        $response = Http::asForm()
-            ->acceptJson()
-            ->post($settings->baseUrl() . '/oauth/token', [
-                'grant_type' => 'password',
-                'client_id' => $settings->client_id,
-                'client_secret' => $settings->client_secret,
-                'username' => $settings->username,
-                'password' => $settings->password,
-            ]);
+        try {
+            $clientSecret = trim((string) $settings->client_secret);
+            $password = (string) $settings->password;
+        } catch (DecryptException $e) {
+            throw new Exception(
+                'No se pudieron descifrar las credenciales guardadas. Vuelva a pegar client secret y contraseña y guarde de nuevo.'
+            );
+        }
+
+        $baseUrl = $settings->baseUrl();
+        $payload = [
+            'grant_type' => 'password',
+            'client_id' => trim((string) $settings->client_id),
+            'client_secret' => $clientSecret,
+            'username' => trim((string) $settings->username),
+            'password' => $password,
+        ];
+
+        try {
+            $response = Http::asForm()
+                ->acceptJson()
+                ->timeout(45)
+                ->post($baseUrl . '/oauth/token', $payload);
+        } catch (ConnectionException $e) {
+            throw new Exception(
+                'No se pudo conectar con Factus en ' . $baseUrl . '. Verifique la URL y que el servidor tenga salida HTTPS. Detalle: ' . $e->getMessage()
+            );
+        }
 
         if (! $response->successful()) {
-            throw new Exception($this->extractError($response->json(), $response->body(), 'No se pudo autenticar con Factus.'));
+            throw new Exception($this->formatAuthError($response->status(), $response->json(), $response->body(), $baseUrl));
         }
 
-        $payload = $response->json() ?: [];
-        $token = $payload['access_token'] ?? null;
+        $body = $response->json() ?: [];
+        $token = $body['access_token'] ?? null;
         if (! $token) {
-            throw new Exception('Factus no devolvió access_token.');
+            throw new Exception('Factus respondió 200 pero sin access_token.');
         }
 
-        $expiresIn = (int) ($payload['expires_in'] ?? 3600);
+        $expiresIn = (int) ($body['expires_in'] ?? 3600);
         $settings->access_token = $token;
         $settings->token_expires_at = now()->addSeconds(max(60, $expiresIn - 60));
         $settings->last_error = null;
@@ -53,10 +83,20 @@ class FactusClient
 
     public function getNumberingRanges(CompanyElectronicInvoiceSetting $settings): array
     {
-        $response = $this->authorized($settings)->get($settings->baseUrl() . '/v2/numbering-ranges');
+        try {
+            $response = $this->authorized($settings)
+                ->get($settings->baseUrl() . '/v2/numbering-ranges', [
+                    'filter' => ['is_active' => 1],
+                ]);
+        } catch (ConnectionException $e) {
+            throw new Exception('No se pudo conectar con Factus al listar rangos: ' . $e->getMessage());
+        }
 
         if (! $response->successful()) {
-            throw new Exception($this->extractError($response->json(), $response->body(), 'No se pudieron obtener los rangos de numeración.'));
+            throw new Exception(
+                'Factus rechazó el listado de rangos (HTTP ' . $response->status() . '): '
+                . $this->extractError($response->json(), $response->body(), 'Error desconocido')
+            );
         }
 
         $payload = $response->json() ?: [];
@@ -95,18 +135,52 @@ class FactusClient
         if (! filled($settings->api_url)) {
             throw new Exception('Debe configurar la URL de la API de Factus.');
         }
-        if (! filled($settings->client_id) || ! filled($settings->client_secret)) {
-            throw new Exception('Debe configurar client_id y client_secret de Factus.');
+        if (! filled($settings->client_id) || ! filled($settings->username)) {
+            throw new Exception('Debe configurar client_id y usuario de Factus.');
         }
-        if (! filled($settings->username) || ! filled($settings->password)) {
-            throw new Exception('Debe configurar usuario y contraseña de Factus.');
+
+        try {
+            $hasSecret = filled($settings->client_secret);
+            $hasPassword = filled($settings->password);
+        } catch (DecryptException $e) {
+            throw new Exception(
+                'No se pudieron descifrar las credenciales guardadas. Vuelva a pegar client secret y contraseña y guarde de nuevo.'
+            );
         }
+
+        if (! $hasSecret || ! $hasPassword) {
+            throw new Exception(
+                'Faltan client secret y/o contraseña. Pégalos otra vez y guarda (no se muestran al reabrir el modal).'
+            );
+        }
+    }
+
+
+    protected function formatAuthError(int $status, ?array $json, string $body, string $baseUrl): string
+    {
+        $raw = $this->extractError($json, $body, 'No se pudo autenticar con Factus.');
+        $hint = '';
+
+        $errorCode = is_array($json) ? ($json['error'] ?? null) : null;
+        if ($errorCode === 'invalid_client') {
+            $hint = ' Revise client_id / client_secret y que correspondan al mismo ambiente que la URL (' . $baseUrl . ').';
+        } elseif ($errorCode === 'invalid_grant') {
+            $hint = ' Revise usuario (email) y contraseña de Factus.';
+        }
+
+        Log::warning('Factus auth failed', [
+            'status' => $status,
+            'base_url' => $baseUrl,
+            'body' => mb_substr($body, 0, 500),
+        ]);
+
+        return 'Autenticación Factus falló (HTTP ' . $status . '): ' . $raw . $hint;
     }
 
     protected function extractError(?array $json, string $body, string $fallback): string
     {
         if (is_array($json)) {
-            foreach (['message', 'error', 'error_description'] as $key) {
+            foreach (['error_description', 'message', 'error'] as $key) {
                 if (! empty($json[$key]) && is_string($json[$key])) {
                     return $json[$key];
                 }
