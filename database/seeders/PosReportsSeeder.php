@@ -37,7 +37,7 @@ class PosReportsSeeder extends Seeder
                 'sql' => static fn (string $salesWhere): string => <<<SQL
 SELECT
   s.id AS venta,
-  DATE_FORMAT(s.sold_at, '%Y-%m-%d %H:%i') AS fecha,
+  DATE_FORMAT(s.sold_at, '%d/%m/%Y %H:%i') AS fecha,
   p.name AS sede,
   st.name AS caja,
   u.name AS cajero,
@@ -77,17 +77,17 @@ SELECT
     WHEN 'partially_returned' THEN 'Con devolución'
     ELSE 'Completada'
   END AS estado,
-  ROUND(s.subtotal, 0) AS subtotal,
-  ROUND(s.discount_amount, 0) AS descuento,
-  ROUND(s.tax_total, 0) AS impuestos,
-  ROUND(s.total, 0) AS total_bruto,
-  ROUND(COALESCE(s.returned_total, 0), 0) AS devoluciones,
-  ROUND(s.total - COALESCE(s.returned_total, 0), 0) AS total_neto,
+  ROUND(s.subtotal, 0) AS _subtotal,
+  ROUND(s.discount_amount, 0) AS _descuento,
+  ROUND(s.tax_total, 0) AS _impuestos,
+  ROUND(s.total, 0) AS _total_bruto,
+  ROUND(COALESCE(s.returned_total, 0), 0) AS _devoluciones,
+  ROUND(s.total - COALESCE(s.returned_total, 0), 0) AS _total_neto,
   ROUND(
     (s.total - COALESCE(s.returned_total, 0))
     - (s.cost_total - COALESCE(s.returned_cost_total, 0)),
     0
-  ) AS utilidad
+  ) AS _utilidad
 FROM sales s
 LEFT JOIN places p ON p.id = s.place_id
 LEFT JOIN stations st ON st.id = s.station_id
@@ -110,13 +110,13 @@ SELECT
   ROUND(SUM(sl.qty - COALESCE(sl.qty_returned, 0)), 2) AS cantidad,
   ROUND(SUM(
     sl.line_total * ((sl.qty - COALESCE(sl.qty_returned, 0)) / NULLIF(sl.qty, 0))
-  ), 0) AS total_vendido,
+  ), 0) AS _total_vendido,
   ROUND(SUM(
     sl.cost_total * ((sl.qty - COALESCE(sl.qty_returned, 0)) / NULLIF(sl.qty, 0))
-  ), 0) AS costo,
+  ), 0) AS _costo,
   ROUND(SUM(
     (sl.line_total - sl.cost_total) * ((sl.qty - COALESCE(sl.qty_returned, 0)) / NULLIF(sl.qty, 0))
-  ), 0) AS utilidad
+  ), 0) AS _utilidad
 FROM sale_lines sl
 INNER JOIN sales s ON s.id = sl.sale_id
 INNER JOIN products pr ON pr.id = sl.product_id
@@ -125,7 +125,7 @@ LEFT JOIN places p ON p.id = s.place_id
 WHERE s.status IN ('completed', 'partially_returned')
   AND {$salesWhere}
 GROUP BY p.name, pr.name, pp.name
-ORDER BY total_vendido DESC, producto ASC
+ORDER BY _total_vendido DESC, producto ASC
 SQL,
             ],
             [
@@ -146,7 +146,7 @@ SELECT
         THEN s.total - COALESCE(s.returned_total, 0)
       ELSE 0
     END
-  ), 0) AS total_neto,
+  ), 0) AS _total_neto,
   ROUND(SUM(
     CASE
       WHEN s.status IN ('completed', 'partially_returned')
@@ -154,13 +154,13 @@ SELECT
              - (s.cost_total - COALESCE(s.returned_cost_total, 0))
       ELSE 0
     END
-  ), 0) AS utilidad
+  ), 0) AS _utilidad
 FROM sales s
 LEFT JOIN places p ON p.id = s.place_id
 LEFT JOIN users u ON u.id = s.user_id
 WHERE {$salesWhere}
 GROUP BY p.name, u.name
-ORDER BY total_neto DESC, cajero ASC
+ORDER BY _total_neto DESC, cajero ASC
 SQL,
             ],
             [
@@ -178,7 +178,7 @@ SELECT
     ELSE COALESCE(x.payment_method, 'Sin dato')
   END AS forma_pago,
   COUNT(DISTINCT x.sale_id) AS ventas,
-  ROUND(SUM(x.amount), 0) AS total_neto
+  ROUND(SUM(x.amount), 0) AS _total_neto
 FROM (
   SELECT
     s.place_id,
@@ -205,7 +205,7 @@ FROM (
 ) x
 LEFT JOIN places p ON p.id = x.place_id
 GROUP BY p.name, x.payment_method
-ORDER BY p.name ASC, total_neto DESC
+ORDER BY p.name ASC, _total_neto DESC
 SQL,
             ],
             [
@@ -218,19 +218,19 @@ SELECT
   p.name AS sede,
   st.name AS caja,
   u.name AS cajero,
-  DATE_FORMAT(rs.opened_at, '%Y-%m-%d %H:%i') AS apertura,
-  DATE_FORMAT(rs.closed_at, '%Y-%m-%d %H:%i') AS cierre,
-  ROUND(rs.opening_cash, 0) AS base,
-  ROUND(COALESCE(rs.cash_sales_total, 0), 0) AS ventas_efectivo,
-  ROUND(COALESCE(rs.expected_cash, 0), 0) AS efectivo_esperado,
-  ROUND(COALESCE(rs.closing_cash, 0), 0) AS efectivo_contado,
-  ROUND(COALESCE(rs.difference_cash, 0), 0) AS diferencia,
+  DATE_FORMAT(rs.opened_at, '%d/%m/%Y %H:%i') AS apertura,
+  DATE_FORMAT(rs.closed_at, '%d/%m/%Y %H:%i') AS cierre,
+  ROUND(rs.opening_cash, 0) AS _base,
+  ROUND(COALESCE(rs.cash_sales_total, 0), 0) AS _ventas_efectivo,
+  ROUND(COALESCE(rs.expected_cash, 0), 0) AS _efectivo_esperado,
+  ROUND(COALESCE(rs.closing_cash, 0), 0) AS _efectivo_contado,
+  ROUND(COALESCE(rs.difference_cash, 0), 0) AS _diferencia,
   ROUND(
     COALESCE(rs.cash_sales_total, 0)
     + COALESCE(rs.card_sales_total, 0)
     + COALESCE(rs.transfer_sales_total, 0),
     0
-  ) AS total_turno
+  ) AS _total_turno
 FROM register_sessions rs
 LEFT JOIN places p ON p.id = rs.place_id
 LEFT JOIN stations st ON st.id = rs.station_id
@@ -252,10 +252,10 @@ SELECT
   ROUND(SUM(sl.qty - COALESCE(sl.qty_returned, 0)), 2) AS unidades,
   ROUND(SUM(
     sl.line_total * ((sl.qty - COALESCE(sl.qty_returned, 0)) / NULLIF(sl.qty, 0))
-  ), 0) AS total_vendido,
+  ), 0) AS _total_vendido,
   ROUND(SUM(
     (sl.line_total - sl.cost_total) * ((sl.qty - COALESCE(sl.qty_returned, 0)) / NULLIF(sl.qty, 0))
-  ), 0) AS utilidad
+  ), 0) AS _utilidad
 FROM sale_lines sl
 INNER JOIN sales s ON s.id = sl.sale_id
 INNER JOIN products pr ON pr.id = sl.product_id
@@ -263,7 +263,7 @@ LEFT JOIN places p ON p.id = s.place_id
 WHERE s.status IN ('completed', 'partially_returned')
   AND {$salesWhere}
 GROUP BY p.name, pr.name
-ORDER BY total_vendido DESC
+ORDER BY _total_vendido DESC
 LIMIT 50
 SQL,
             ],
