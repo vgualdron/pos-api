@@ -48,14 +48,18 @@ class ElectronicInvoiceSettingService
             }
             $settings->is_enabled = (bool) ($companyData['is_enabled'] ?? false);
 
+            $secretsTouched = false;
             if (array_key_exists('client_secret', $companyData) && filled($companyData['client_secret'])) {
                 $settings->client_secret = trim((string) $companyData['client_secret']);
-                $settings->access_token = null;
-                $settings->token_expires_at = null;
+                $secretsTouched = true;
             }
 
             if (array_key_exists('password', $companyData) && filled($companyData['password'])) {
                 $settings->password = (string) $companyData['password'];
+                $secretsTouched = true;
+            }
+
+            if ($secretsTouched) {
                 $settings->access_token = null;
                 $settings->token_expires_at = null;
             }
@@ -64,7 +68,9 @@ class ElectronicInvoiceSettingService
                 throw new Exception('La URL de la API es obligatoria.');
             }
 
+            // Persist without decrypting existing secret columns during serialization edge-cases
             $settings->save();
+
 
             $placeIds = Place::query()->where('company_id', $companyId)->pluck('id')->all();
             $allowed = array_flip($placeIds);
