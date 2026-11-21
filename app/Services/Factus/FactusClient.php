@@ -59,10 +59,18 @@ class FactusClient
         ];
 
         try {
-            $response = Http::asForm()
+            // Factus docs ask for form-data; fall back to x-www-form-urlencoded (their Laravel example).
+            $response = Http::asMultipart()
                 ->acceptJson()
                 ->timeout(45)
                 ->post($baseUrl . '/oauth/token', $payload);
+
+            if (! $response->successful() && ($response->json('error') ?? null) === 'invalid_client') {
+                $response = Http::asForm()
+                    ->acceptJson()
+                    ->timeout(45)
+                    ->post($baseUrl . '/oauth/token', $payload);
+            }
         } catch (ConnectionException $e) {
             throw new Exception(
                 'No se pudo conectar con Factus en ' . $baseUrl . '. Verifique la URL y que el servidor tenga salida HTTPS. Detalle: ' . $e->getMessage()
@@ -81,6 +89,7 @@ class FactusClient
                 strlen($password)
             ));
         }
+
 
         $body = $response->json() ?: [];
         $token = $body['access_token'] ?? null;
