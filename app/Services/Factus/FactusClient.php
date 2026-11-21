@@ -134,46 +134,96 @@ class FactusClient
 
     protected function fetchNumberingRanges(CompanyElectronicInvoiceSetting $settings, string $document): array
     {
-        // Same query string shape as Postman collection
-        $query = http_build_query([
-            'filter[id]' => '',
-            'filter[document]' => $document,
-            'filter[resolution_number]' => '',
-            'filter[technical_key]' => '',
-            'filter[is_active]' => '1',
-        ]);
-
-        $url = $settings->baseUrl() . '/v2/numbering-ranges?' . $query;
         $token = $this->authenticate($settings);
+        $base = $settings->baseUrl() . '/v2/numbering-ranges';
 
-        try {
-            // Do not use asJson() on GET — mirrors Postman Accept + query string only
-            $response = Http::withToken($token)
-                ->withHeaders([
-                    'Accept' => 'application/json',
-                    'Content-Type' => 'application/json',
-                ])
-                ->timeout(45)
-                ->get($url);
-        } catch (ConnectionException $e) {
-            throw new Exception('No se pudo conectar con Factus al listar rangos: ' . $e->getMessage());
+        // Important: do NOT send empty filter[id]= etc. Factus can treat them as
+        // "match empty" and return zero rows. Postman often "works" despite that;
+        // we only send filters with real values (same effective call as a clean Postman).
+        $attempts = [
+            $base . '?' . http_build_query([
+                'filter' => [
+                    'document' => $document,
+                    'is_active' => '1',
+                ],
+            ]),
+            $base . '?' . http_build_query([
+                'filter' => [
+                    'document' => $document,
+                ],
+            ]),
+            $base,
+        ];
+
+        $lastPayload = [];
+        $lastUrl = $attempts[0];
+        $lastError = null;
+
+        foreach ($attempts as $url) {
+            $lastUrl = $url;
+            try {
+                $response = Http::withToken($token)
+                    ->acceptJson()
+                    ->timeout(45)
+                    ->get($url);
+            } catch (ConnectionException $e) {
+                throw new Exception('No se pudo conectar con Factus al listar rangos: ' . $e->getMessage());
+            }
+
+            if (! $response->successful()) {
+                $lastError = 'Factus rechazó el listado de rangos (HTTP ' . $response->status() . '): '
+                    . $this->extractError($response->json(), $response->body(), 'Error desconocido')
+                    . ' [url=' . $url . ']';
+                continue;
+            }
+
+            $payload = $response->json() ?: [];
+            $lastPayload = $payload;
+            $rows = $this->extractDataRows($payload);
+
+            Log::info('Factus numbering-ranges', [
+                'url' => $url,
+                'status' => $response->status(),
+                'count' => count($rows),
+                'keys' => array_keys($payload),
+            ]);
+
+            if (count($rows) > 0) {
+                // If unfiltered, keep only the requested document when possible
+                if ($url === $base) {
+                    $filtered = array_values(array_filter($rows, function ($row) use ($document) {
+                        $code = (string) ($row['document'] ?? '');
+                        if ($code === $document) {
+                            return true;
+                        }
+                        $name = mb_strtolower((string) ($row['document'] ?? $row['document_name'] ?? ''));
+                        if ($document === '21') {
+                            return str_contains($name, 'factura') && ! str_contains($name, 'nota');
+                        }
+                        if ($document === '22') {
+                            return str_contains($name, 'crédito') || str_contains($name, 'credito');
+                        }
+
+                        return false;
+                    }));
+
+                    return count($filtered) > 0 ? $filtered : $rows;
+                }
+
+                return $rows;
+            }
         }
 
-        if (! $response->successful()) {
-            throw new Exception(
-                'Factus rechazó el listado de rangos (HTTP ' . $response->status() . '): '
-                . $this->extractError($response->json(), $response->body(), 'Error desconocido')
-                . ' [url=' . $url . ']'
-            );
+        if ($lastError) {
+            throw new Exception($lastError);
         }
 
-        Log::info('Factus numbering-ranges', [
-            'url' => $url,
-            'status' => $response->status(),
-            'count' => count($this->extractDataRows($response->json() ?: [])),
+        Log::warning('Factus numbering-ranges empty', [
+            'last_url' => $lastUrl,
+            'payload_preview' => mb_substr(json_encode($lastPayload), 0, 500),
         ]);
 
-        return $this->extractDataRows($response->json() ?: []);
+        return $this->extractDataRows($lastPayload);
     }
 
     public function getDianNumberingRanges(CompanyElectronicInvoiceSetting $settings): array
@@ -281,7 +331,17 @@ class FactusClient
     protected function extractDataRows(array $payload): array
     {
         if (isset($payload['data']) && is_array($payload['data'])) {
-            return array_values($payload['data']);
+            // data can be a list of ranges, or a paginated wrapper
+            $data = $payload['data'];
+            if (isset($data['data']) && is_array($data['data'])) {
+                return array_values($data['data']);
+            }
+
+            return array_values($data);
+        }
+
+        if (isset($payload['numbering_ranges']) && is_array($payload['numbering_ranges'])) {
+            return array_values($payload['numbering_ranges']);
         }
 
         // Some endpoints return a bare list

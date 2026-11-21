@@ -81,11 +81,15 @@ class ElectronicInvoiceSettingController extends Controller
         try {
             CompanyScope::assert($request->user(), (int) $companyId);
             $document = $request->query('document', '21');
+            $doc = is_string($document) ? $document : '21';
+            $rows = $this->service->numberingRanges((int) $companyId, $doc);
 
             return response()->json([
-                'data' => $this->service->numberingRanges((int) $companyId, is_string($document) ? $document : '21'),
-                'document' => $document,
+                'data' => $rows,
+                'document' => $doc,
+                'count' => count($rows),
             ]);
+
         } catch (Exception $e) {
             return response()->json([
                 'error' => 'Error al listar rangos de numeración',
