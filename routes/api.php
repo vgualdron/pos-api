@@ -24,6 +24,7 @@ use App\Http\Controllers\TaxController;
 use App\Http\Controllers\ProductCategoryController;
 use App\Http\Controllers\ProductFavoriteController;
 use App\Http\Controllers\PosDashboardController;
+use App\Http\Controllers\ElectronicInvoiceSettingController;
 
 Route::get('/health', function (Request $request) {
     return 'Health ... active';
@@ -52,11 +53,16 @@ Route::group(['middleware' => ['auth:api'], 'prefix' => '/stations'], function (
 Route::group(['middleware' => ['auth:api'], 'prefix' => '/companies'], function () {
     Route::get('/', [CompanyController::class, 'index']);
     Route::get('status/{status}', [CompanyController::class, 'byStatus']);
+    Route::get('{companyId}/electronic-invoice', [ElectronicInvoiceSettingController::class, 'show']);
+    Route::put('{companyId}/electronic-invoice', [ElectronicInvoiceSettingController::class, 'upsert']);
+    Route::post('{companyId}/electronic-invoice/test', [ElectronicInvoiceSettingController::class, 'test']);
+    Route::get('{companyId}/electronic-invoice/numbering-ranges', [ElectronicInvoiceSettingController::class, 'numberingRanges']);
     Route::get('{id}', [CompanyController::class, 'show']);
     Route::post('/', [CompanyController::class, 'store']);
     Route::put('{id}', [CompanyController::class, 'update']);
     Route::delete('{id}', [CompanyController::class, 'destroy']);
 });
+
 
 Route::group(['middleware' => ['auth:api'], 'prefix' => '/places'], function () {
     Route::get('/', [PlaceController::class, 'index']);

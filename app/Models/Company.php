@@ -29,4 +29,10 @@ class Company extends Model
     {
         return $this->hasMany(Place::class);
     }
+
+    public function electronicInvoiceSetting()
+    {
+        return $this->hasOne(CompanyElectronicInvoiceSetting::class);
+    }
 }
+

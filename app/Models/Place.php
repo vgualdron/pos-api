@@ -18,4 +18,10 @@ class Place extends Model
     {
         return $this->hasMany(Station::class);
     }
+
+    public function electronicInvoiceSetting()
+    {
+        return $this->hasOne(PlaceElectronicInvoiceSetting::class);
+    }
 }
+
