@@ -87,6 +87,10 @@ class ElectronicInvoiceSettingService
                     ? (int) $row['numbering_range_id']
                     : null;
                 $placeSettings->numbering_range_label = $row['numbering_range_label'] ?? null;
+                $placeSettings->credit_note_numbering_range_id = isset($row['credit_note_numbering_range_id']) && $row['credit_note_numbering_range_id'] !== ''
+                    ? (int) $row['credit_note_numbering_range_id']
+                    : null;
+                $placeSettings->credit_note_numbering_range_label = $row['credit_note_numbering_range_label'] ?? null;
                 $placeSettings->establishment_name = $row['establishment_name'] ?? null;
                 $placeSettings->establishment_address = $row['establishment_address'] ?? null;
                 $placeSettings->establishment_phone = $row['establishment_phone'] ?? null;
@@ -157,14 +161,61 @@ class ElectronicInvoiceSettingService
 
     public function numberingRanges(int $companyId): array
     {
+        $settings = $this->requireCompanySettings($companyId);
+        $ranges = $this->factus->getNumberingRanges($settings);
+
+        return $this->mapRanges($ranges);
+    }
+
+    public function dianNumberingRanges(int $companyId): array
+    {
+        $settings = $this->requireCompanySettings($companyId);
+
+        return $this->factus->getDianNumberingRanges($settings);
+    }
+
+    public function createNumberingRange(int $companyId, array $data): array
+    {
+        $settings = $this->requireCompanySettings($companyId);
+        $created = $this->factus->createNumberingRange($settings, $data);
+        $ranges = $this->mapRanges($this->factus->getNumberingRanges($settings));
+
+        return [
+            'created' => $created,
+            'numbering_ranges' => $ranges,
+        ];
+    }
+
+    public function updateNumberingRangeCurrent(int $companyId, int $rangeId, $current): array
+    {
+        $settings = $this->requireCompanySettings($companyId);
+        $updated = $this->factus->updateNumberingRangeCurrent($settings, $rangeId, $current);
+
+        return [
+            'updated' => $updated,
+            'numbering_ranges' => $this->mapRanges($this->factus->getNumberingRanges($settings)),
+        ];
+    }
+
+    public function toggleNumberingRangeStatus(int $companyId, int $rangeId): array
+    {
+        $settings = $this->requireCompanySettings($companyId);
+        $updated = $this->factus->toggleNumberingRangeStatus($settings, $rangeId);
+
+        return [
+            'updated' => $updated,
+            'numbering_ranges' => $this->mapRanges($this->factus->getNumberingRanges($settings)),
+        ];
+    }
+
+    protected function requireCompanySettings(int $companyId): CompanyElectronicInvoiceSetting
+    {
         $settings = CompanyElectronicInvoiceSetting::query()->where('company_id', $companyId)->first();
         if (! $settings) {
             throw new Exception('Guarde primero la configuración de Factus de la empresa.');
         }
 
-        $ranges = $this->factus->getNumberingRanges($settings);
-
-        return $this->mapRanges($ranges);
+        return $settings;
     }
 
     protected function serialize(Company $company): array
@@ -194,6 +245,8 @@ class ElectronicInvoiceSettingService
                     'is_enabled' => (bool) ($s?->is_enabled ?? false),
                     'numbering_range_id' => $s?->numbering_range_id,
                     'numbering_range_label' => $s?->numbering_range_label,
+                    'credit_note_numbering_range_id' => $s?->credit_note_numbering_range_id,
+                    'credit_note_numbering_range_label' => $s?->credit_note_numbering_range_label,
                     'establishment_name' => $s?->establishment_name ?? $place->name,
                     'establishment_address' => $s?->establishment_address ?? $place->address,
                     'establishment_phone' => $s?->establishment_phone ?? $place->phone,
@@ -206,14 +259,38 @@ class ElectronicInvoiceSettingService
 
     protected function mapRanges(array $ranges): array
     {
-        return collect($ranges)->map(function ($row) {
+        $documentLabels = [
+            '21' => 'Factura',
+            '22' => 'Nota crédito',
+            '23' => 'Nota débito',
+            '24' => 'Doc. soporte',
+            '25' => 'Nota ajuste DS',
+        ];
+
+        return collect($ranges)->map(function ($row) use ($documentLabels) {
             $id = $row['id'] ?? $row['numbering_range_id'] ?? null;
-            $prefix = $row['prefix'] ?? '';
+            $prefix = trim((string) ($row['prefix'] ?? ''));
             $from = $row['from'] ?? $row['initial_range'] ?? null;
             $to = $row['to'] ?? $row['final_range'] ?? null;
             $resolution = $row['resolution_number'] ?? $row['resolution'] ?? null;
+            $document = (string) ($row['document'] ?? $row['document_code'] ?? '');
+            // Factus sometimes returns document name instead of code
+            if ($document !== '' && ! isset($documentLabels[$document])) {
+                $docName = mb_strtolower($document);
+                if (str_contains($docName, 'crédito') || str_contains($docName, 'credito')) {
+                    $document = '22';
+                } elseif (str_contains($docName, 'débito') || str_contains($docName, 'debito')) {
+                    $document = '23';
+                } elseif (str_contains($docName, 'soporte')) {
+                    $document = '24';
+                } elseif (str_contains($docName, 'factura')) {
+                    $document = '21';
+                }
+            }
+            $docLabel = $documentLabels[$document] ?? ($row['document_name'] ?? $row['document'] ?? 'Documento');
             $parts = array_filter([
-                $prefix ? "Prefijo {$prefix}" : null,
+                $docLabel,
+                $prefix !== '' ? "Prefijo {$prefix}" : null,
                 $id !== null ? "#{$id}" : null,
                 $resolution ? "Res. {$resolution}" : null,
                 ($from !== null && $to !== null) ? "{$from}-{$to}" : null,
@@ -221,6 +298,11 @@ class ElectronicInvoiceSettingService
 
             return [
                 'id' => $id,
+                'document' => $document,
+                'document_label' => $docLabel,
+                'prefix' => $prefix,
+                'is_active' => (bool) ($row['is_active'] ?? true),
+                'current' => $row['current'] ?? null,
                 'label' => implode(' · ', $parts) ?: (string) $id,
                 'raw' => $row,
             ];

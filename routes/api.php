@@ -57,6 +57,11 @@ Route::group(['middleware' => ['auth:api'], 'prefix' => '/companies'], function 
     Route::put('{companyId}/electronic-invoice', [ElectronicInvoiceSettingController::class, 'upsert']);
     Route::post('{companyId}/electronic-invoice/test', [ElectronicInvoiceSettingController::class, 'test']);
     Route::get('{companyId}/electronic-invoice/numbering-ranges', [ElectronicInvoiceSettingController::class, 'numberingRanges']);
+    Route::get('{companyId}/electronic-invoice/numbering-ranges/dian', [ElectronicInvoiceSettingController::class, 'dianNumberingRanges']);
+    Route::post('{companyId}/electronic-invoice/numbering-ranges', [ElectronicInvoiceSettingController::class, 'createNumberingRange']);
+    Route::patch('{companyId}/electronic-invoice/numbering-ranges/{rangeId}/current', [ElectronicInvoiceSettingController::class, 'updateNumberingRangeCurrent']);
+    Route::patch('{companyId}/electronic-invoice/numbering-ranges/{rangeId}/toggle-status', [ElectronicInvoiceSettingController::class, 'toggleNumberingRangeStatus']);
+
     Route::get('{id}', [CompanyController::class, 'show']);
     Route::post('/', [CompanyController::class, 'store']);
     Route::put('{id}', [CompanyController::class, 'update']);

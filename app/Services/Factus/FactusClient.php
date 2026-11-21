@@ -167,6 +167,89 @@ class FactusClient
         return $this->extractDataRows($response->json() ?: []);
     }
 
+    public function createNumberingRange(CompanyElectronicInvoiceSetting $settings, array $data): array
+    {
+        $document = (string) ($data['document'] ?? '');
+        $prefix = trim((string) ($data['prefix'] ?? ''));
+        $current = $data['current'] ?? null;
+
+        if ($document === '' || $prefix === '' || $current === null || $current === '') {
+            throw new Exception('document, prefix y current son obligatorios.');
+        }
+
+        if (strlen($prefix) > 4) {
+            throw new Exception('El prefijo puede tener máximo 4 caracteres.');
+        }
+
+        $body = [
+            'document' => $document,
+            'prefix' => $prefix,
+            'current' => is_numeric($current) ? (0 + $current) : $current,
+        ];
+
+        // Invoice and support docs require DIAN resolution number
+        if (in_array($document, ['21', '24'], true)) {
+            $resolution = trim((string) ($data['resolution_number'] ?? ''));
+            if ($resolution === '') {
+                throw new Exception('resolution_number es obligatorio para factura (21) y documento soporte (24).');
+            }
+            $body['resolution_number'] = $resolution;
+        }
+
+        $response = $this->authorized($settings)
+            ->post($settings->baseUrl() . '/v2/numbering-ranges', $body);
+
+        if (! $response->successful()) {
+            throw new Exception(
+                'No se pudo crear el rango (HTTP ' . $response->status() . '): '
+                . $this->extractError($response->json(), $response->body(), 'Error desconocido')
+            );
+        }
+
+        $payload = $response->json() ?: [];
+        if (isset($payload['data']) && is_array($payload['data'])) {
+            return $payload['data'];
+        }
+
+        return $payload;
+    }
+
+    public function updateNumberingRangeCurrent(CompanyElectronicInvoiceSetting $settings, int $rangeId, $current): array
+    {
+        $response = $this->authorized($settings)
+            ->patch($settings->baseUrl() . '/v2/numbering-ranges/' . $rangeId . '/current', [
+                'current' => is_numeric($current) ? (0 + $current) : $current,
+            ]);
+
+        if (! $response->successful()) {
+            throw new Exception(
+                'No se pudo actualizar el consecutivo (HTTP ' . $response->status() . '): '
+                . $this->extractError($response->json(), $response->body(), 'Error desconocido')
+            );
+        }
+
+        $payload = $response->json() ?: [];
+
+        return isset($payload['data']) && is_array($payload['data']) ? $payload['data'] : $payload;
+    }
+
+    public function toggleNumberingRangeStatus(CompanyElectronicInvoiceSetting $settings, int $rangeId): array
+    {
+        $response = $this->authorized($settings)
+            ->patch($settings->baseUrl() . '/v2/numbering-ranges/' . $rangeId . '/toggle-status');
+
+        if (! $response->successful()) {
+            throw new Exception(
+                'No se pudo cambiar el estado del rango (HTTP ' . $response->status() . '): '
+                . $this->extractError($response->json(), $response->body(), 'Error desconocido')
+            );
+        }
+
+        $payload = $response->json() ?: [];
+
+        return isset($payload['data']) && is_array($payload['data']) ? $payload['data'] : $payload;
+    }
+
     protected function extractDataRows(array $payload): array
     {
         if (isset($payload['data']) && is_array($payload['data'])) {

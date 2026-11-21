@@ -12,6 +12,8 @@ class PlaceElectronicInvoiceSetting extends Model
         'is_enabled',
         'numbering_range_id',
         'numbering_range_label',
+        'credit_note_numbering_range_id',
+        'credit_note_numbering_range_label',
         'establishment_name',
         'establishment_address',
         'establishment_phone',
@@ -22,6 +24,7 @@ class PlaceElectronicInvoiceSetting extends Model
     protected $casts = [
         'is_enabled' => 'boolean',
         'numbering_range_id' => 'integer',
+        'credit_note_numbering_range_id' => 'integer',
     ];
 
     public function place(): BelongsTo
