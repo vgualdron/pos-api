@@ -72,12 +72,22 @@ SELECT
       ELSE s.payment_method
     END
   ) AS pago,
-  CASE s.status WHEN 'cancelled' THEN 'Anulada' ELSE 'Completada' END AS estado,
+  CASE s.status
+    WHEN 'cancelled' THEN 'Anulada'
+    WHEN 'partially_returned' THEN 'Con devolución'
+    ELSE 'Completada'
+  END AS estado,
   ROUND(s.subtotal, 0) AS subtotal,
   ROUND(s.discount_amount, 0) AS descuento,
   ROUND(s.tax_total, 0) AS impuestos,
-  ROUND(s.total, 0) AS total,
-  ROUND(s.total - s.cost_total, 0) AS utilidad
+  ROUND(s.total, 0) AS total_bruto,
+  ROUND(COALESCE(s.returned_total, 0), 0) AS devoluciones,
+  ROUND(s.total - COALESCE(s.returned_total, 0), 0) AS total_neto,
+  ROUND(
+    (s.total - COALESCE(s.returned_total, 0))
+    - (s.cost_total - COALESCE(s.returned_cost_total, 0)),
+    0
+  ) AS utilidad
 FROM sales s
 LEFT JOIN places p ON p.id = s.place_id
 LEFT JOIN stations st ON st.id = s.station_id
@@ -97,16 +107,22 @@ SELECT
   p.name AS sede,
   pr.name AS producto,
   COALESCE(pp.name, '—') AS presentacion,
-  ROUND(SUM(sl.qty), 2) AS cantidad,
-  ROUND(SUM(sl.line_total), 0) AS total_vendido,
-  ROUND(SUM(sl.cost_total), 0) AS costo,
-  ROUND(SUM(sl.line_total - sl.cost_total), 0) AS utilidad
+  ROUND(SUM(sl.qty - COALESCE(sl.qty_returned, 0)), 2) AS cantidad,
+  ROUND(SUM(
+    sl.line_total * ((sl.qty - COALESCE(sl.qty_returned, 0)) / NULLIF(sl.qty, 0))
+  ), 0) AS total_vendido,
+  ROUND(SUM(
+    sl.cost_total * ((sl.qty - COALESCE(sl.qty_returned, 0)) / NULLIF(sl.qty, 0))
+  ), 0) AS costo,
+  ROUND(SUM(
+    (sl.line_total - sl.cost_total) * ((sl.qty - COALESCE(sl.qty_returned, 0)) / NULLIF(sl.qty, 0))
+  ), 0) AS utilidad
 FROM sale_lines sl
 INNER JOIN sales s ON s.id = sl.sale_id
 INNER JOIN products pr ON pr.id = sl.product_id
 LEFT JOIN product_presentations pp ON pp.id = sl.product_presentation_id
 LEFT JOIN places p ON p.id = s.place_id
-WHERE s.status = 'completed'
+WHERE s.status IN ('completed', 'partially_returned')
   AND {$salesWhere}
 GROUP BY p.name, pr.name, pp.name
 ORDER BY total_vendido DESC, producto ASC
@@ -123,14 +139,28 @@ SELECT
   u.name AS cajero,
   COUNT(*) AS ventas,
   SUM(CASE WHEN s.status = 'cancelled' THEN 1 ELSE 0 END) AS anuladas,
-  ROUND(SUM(CASE WHEN s.status = 'completed' THEN s.total ELSE 0 END), 0) AS total_vendido,
-  ROUND(SUM(CASE WHEN s.status = 'completed' THEN s.total - s.cost_total ELSE 0 END), 0) AS utilidad
+  SUM(CASE WHEN s.status = 'partially_returned' THEN 1 ELSE 0 END) AS con_devolucion,
+  ROUND(SUM(
+    CASE
+      WHEN s.status IN ('completed', 'partially_returned')
+        THEN s.total - COALESCE(s.returned_total, 0)
+      ELSE 0
+    END
+  ), 0) AS total_neto,
+  ROUND(SUM(
+    CASE
+      WHEN s.status IN ('completed', 'partially_returned')
+        THEN (s.total - COALESCE(s.returned_total, 0))
+             - (s.cost_total - COALESCE(s.returned_cost_total, 0))
+      ELSE 0
+    END
+  ), 0) AS utilidad
 FROM sales s
 LEFT JOIN places p ON p.id = s.place_id
 LEFT JOIN users u ON u.id = s.user_id
 WHERE {$salesWhere}
 GROUP BY p.name, u.name
-ORDER BY total_vendido DESC, cajero ASC
+ORDER BY total_neto DESC, cajero ASC
 SQL,
             ],
             [
@@ -141,21 +171,41 @@ SQL,
                 'sql' => static fn (string $salesWhere): string => <<<SQL
 SELECT
   p.name AS sede,
-  CASE sp.payment_method
+  CASE x.payment_method
     WHEN 'cash' THEN 'Efectivo'
     WHEN 'card' THEN 'Tarjeta'
     WHEN 'transfer' THEN 'Transferencia'
-    ELSE COALESCE(sp.payment_method, 'Sin dato')
+    ELSE COALESCE(x.payment_method, 'Sin dato')
   END AS forma_pago,
-  COUNT(DISTINCT s.id) AS ventas,
-  ROUND(SUM(sp.amount), 0) AS total_vendido
-FROM sale_payments sp
-INNER JOIN sales s ON s.id = sp.sale_id
-LEFT JOIN places p ON p.id = s.place_id
-WHERE s.status = 'completed'
-  AND {$salesWhere}
-GROUP BY p.name, sp.payment_method
-ORDER BY p.name ASC, total_vendido DESC
+  COUNT(DISTINCT x.sale_id) AS ventas,
+  ROUND(SUM(x.amount), 0) AS total_neto
+FROM (
+  SELECT
+    s.place_id,
+    s.id AS sale_id,
+    sp.payment_method,
+    sp.amount
+  FROM sale_payments sp
+  INNER JOIN sales s ON s.id = sp.sale_id
+  WHERE s.status IN ('completed', 'partially_returned')
+    AND {$salesWhere}
+
+  UNION ALL
+
+  SELECT
+    s.place_id,
+    s.id AS sale_id,
+    srp.payment_method,
+    -srp.amount AS amount
+  FROM sale_return_payments srp
+  INNER JOIN sale_returns sr ON sr.id = srp.sale_return_id
+  INNER JOIN sales s ON s.id = sr.sale_id
+  WHERE s.status IN ('completed', 'partially_returned')
+    AND {$salesWhere}
+) x
+LEFT JOIN places p ON p.id = x.place_id
+GROUP BY p.name, x.payment_method
+ORDER BY p.name ASC, total_neto DESC
 SQL,
             ],
             [
@@ -199,14 +249,18 @@ SQL,
 SELECT
   p.name AS sede,
   pr.name AS producto,
-  ROUND(SUM(sl.qty), 2) AS unidades,
-  ROUND(SUM(sl.line_total), 0) AS total_vendido,
-  ROUND(SUM(sl.line_total - sl.cost_total), 0) AS utilidad
+  ROUND(SUM(sl.qty - COALESCE(sl.qty_returned, 0)), 2) AS unidades,
+  ROUND(SUM(
+    sl.line_total * ((sl.qty - COALESCE(sl.qty_returned, 0)) / NULLIF(sl.qty, 0))
+  ), 0) AS total_vendido,
+  ROUND(SUM(
+    (sl.line_total - sl.cost_total) * ((sl.qty - COALESCE(sl.qty_returned, 0)) / NULLIF(sl.qty, 0))
+  ), 0) AS utilidad
 FROM sale_lines sl
 INNER JOIN sales s ON s.id = sl.sale_id
 INNER JOIN products pr ON pr.id = sl.product_id
 LEFT JOIN places p ON p.id = s.place_id
-WHERE s.status = 'completed'
+WHERE s.status IN ('completed', 'partially_returned')
   AND {$salesWhere}
 GROUP BY p.name, pr.name
 ORDER BY total_vendido DESC
