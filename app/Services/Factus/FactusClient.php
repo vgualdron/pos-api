@@ -106,55 +106,74 @@ class FactusClient
         return $token;
     }
 
-    public function getNumberingRanges(CompanyElectronicInvoiceSetting $settings): array
+    /**
+     * List Factus numbering ranges.
+     * $document: Factus range document code (21 invoice, 22 credit note, ...) or "all".
+     */
+    public function getNumberingRanges(CompanyElectronicInvoiceSetting $settings, ?string $document = '21'): array
     {
-        // Match Postman query style: filter[document]=21&filter[is_active]=1
-        // Use flat keys so Guzzle encodes them exactly like Postman.
-        $attempts = [
-            [
-                'filter[document]' => '21',
-                'filter[is_active]' => '1',
-            ],
-            [
-                'filter[is_active]' => '1',
-            ],
-            [],
-            [
-                'filter[trashed]' => 'with',
-            ],
-        ];
+        $document = $document !== null ? trim($document) : '21';
 
-
-        $lastPayload = [];
-        $lastError = null;
-
-        foreach ($attempts as $query) {
-            try {
-                $response = $this->authorized($settings)
-                    ->get($settings->baseUrl() . '/v2/numbering-ranges', $query);
-            } catch (ConnectionException $e) {
-                throw new Exception('No se pudo conectar con Factus al listar rangos: ' . $e->getMessage());
+        if ($document === '' || strtolower($document) === 'all') {
+            $merged = [];
+            foreach (['21', '22', '23', '24'] as $code) {
+                foreach ($this->fetchNumberingRanges($settings, $code) as $row) {
+                    $id = $row['id'] ?? null;
+                    if ($id === null) {
+                        continue;
+                    }
+                    $merged[(string) $id] = $row;
+                }
             }
 
-            if (! $response->successful()) {
-                $lastError = 'Factus rechazó el listado de rangos (HTTP ' . $response->status() . '): '
-                    . $this->extractError($response->json(), $response->body(), 'Error desconocido');
-                continue;
-            }
-
-            $payload = $response->json() ?: [];
-            $lastPayload = $payload;
-            $rows = $this->extractDataRows($payload);
-            if (count($rows) > 0) {
-                return $rows;
-            }
+            return array_values($merged);
         }
 
-        if ($lastError && empty($lastPayload)) {
-            throw new Exception($lastError);
+        return $this->fetchNumberingRanges($settings, $document);
+    }
+
+    protected function fetchNumberingRanges(CompanyElectronicInvoiceSetting $settings, string $document): array
+    {
+        // Same query string shape as Postman collection
+        $query = http_build_query([
+            'filter[id]' => '',
+            'filter[document]' => $document,
+            'filter[resolution_number]' => '',
+            'filter[technical_key]' => '',
+            'filter[is_active]' => '1',
+        ]);
+
+        $url = $settings->baseUrl() . '/v2/numbering-ranges?' . $query;
+        $token = $this->authenticate($settings);
+
+        try {
+            // Do not use asJson() on GET — mirrors Postman Accept + query string only
+            $response = Http::withToken($token)
+                ->withHeaders([
+                    'Accept' => 'application/json',
+                    'Content-Type' => 'application/json',
+                ])
+                ->timeout(45)
+                ->get($url);
+        } catch (ConnectionException $e) {
+            throw new Exception('No se pudo conectar con Factus al listar rangos: ' . $e->getMessage());
         }
 
-        return $this->extractDataRows($lastPayload);
+        if (! $response->successful()) {
+            throw new Exception(
+                'Factus rechazó el listado de rangos (HTTP ' . $response->status() . '): '
+                . $this->extractError($response->json(), $response->body(), 'Error desconocido')
+                . ' [url=' . $url . ']'
+            );
+        }
+
+        Log::info('Factus numbering-ranges', [
+            'url' => $url,
+            'status' => $response->status(),
+            'count' => count($this->extractDataRows($response->json() ?: [])),
+        ]);
+
+        return $this->extractDataRows($response->json() ?: []);
     }
 
     public function getDianNumberingRanges(CompanyElectronicInvoiceSetting $settings): array

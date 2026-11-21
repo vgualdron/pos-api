@@ -80,9 +80,11 @@ class ElectronicInvoiceSettingController extends Controller
     {
         try {
             CompanyScope::assert($request->user(), (int) $companyId);
+            $document = $request->query('document', '21');
 
             return response()->json([
-                'data' => $this->service->numberingRanges((int) $companyId),
+                'data' => $this->service->numberingRanges((int) $companyId, is_string($document) ? $document : '21'),
+                'document' => $document,
             ]);
         } catch (Exception $e) {
             return response()->json([

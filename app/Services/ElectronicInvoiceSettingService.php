@@ -132,7 +132,8 @@ class ElectronicInvoiceSettingService
         $ranges = [];
         $rangesError = null;
         try {
-            $ranges = $this->factus->getNumberingRanges($settings);
+            // Load invoice + credit note ranges for assignment after a successful auth test
+            $ranges = $this->factus->getNumberingRanges($settings, 'all');
         } catch (Exception $e) {
             $rangesError = $e->getMessage();
         }
@@ -168,10 +169,10 @@ class ElectronicInvoiceSettingService
     }
 
 
-    public function numberingRanges(int $companyId): array
+    public function numberingRanges(int $companyId, ?string $document = '21'): array
     {
         $settings = $this->requireCompanySettings($companyId);
-        $ranges = $this->factus->getNumberingRanges($settings);
+        $ranges = $this->factus->getNumberingRanges($settings, $document);
 
         return $this->mapRanges($ranges);
     }
@@ -187,7 +188,8 @@ class ElectronicInvoiceSettingService
     {
         $settings = $this->requireCompanySettings($companyId);
         $created = $this->factus->createNumberingRange($settings, $data);
-        $ranges = $this->mapRanges($this->factus->getNumberingRanges($settings));
+        $document = (string) ($data['document'] ?? '21');
+        $ranges = $this->mapRanges($this->factus->getNumberingRanges($settings, $document));
 
         return [
             'created' => $created,
@@ -195,25 +197,25 @@ class ElectronicInvoiceSettingService
         ];
     }
 
-    public function updateNumberingRangeCurrent(int $companyId, int $rangeId, $current): array
+    public function updateNumberingRangeCurrent(int $companyId, int $rangeId, $current, ?string $document = 'all'): array
     {
         $settings = $this->requireCompanySettings($companyId);
         $updated = $this->factus->updateNumberingRangeCurrent($settings, $rangeId, $current);
 
         return [
             'updated' => $updated,
-            'numbering_ranges' => $this->mapRanges($this->factus->getNumberingRanges($settings)),
+            'numbering_ranges' => $this->mapRanges($this->factus->getNumberingRanges($settings, $document)),
         ];
     }
 
-    public function toggleNumberingRangeStatus(int $companyId, int $rangeId): array
+    public function toggleNumberingRangeStatus(int $companyId, int $rangeId, ?string $document = 'all'): array
     {
         $settings = $this->requireCompanySettings($companyId);
         $updated = $this->factus->toggleNumberingRangeStatus($settings, $rangeId);
 
         return [
             'updated' => $updated,
-            'numbering_ranges' => $this->mapRanges($this->factus->getNumberingRanges($settings)),
+            'numbering_ranges' => $this->mapRanges($this->factus->getNumberingRanges($settings, $document)),
         ];
     }
 
