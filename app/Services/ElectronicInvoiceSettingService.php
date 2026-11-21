@@ -39,22 +39,29 @@ class ElectronicInvoiceSettingService
 
             $settings = CompanyElectronicInvoiceSetting::query()->firstOrNew(['company_id' => $companyId]);
             $settings->provider = $companyData['provider'] ?? $settings->provider ?? 'factus';
-            $settings->api_url = rtrim(trim((string) ($companyData['api_url'] ?? $settings->api_url ?? '')), '/');
-            if (array_key_exists('client_id', $companyData)) {
-                $settings->client_id = FactusClient::cleanCredential($companyData['client_id'] ?? '');
+
+            // Never wipe existing company credentials with empty payload fields
+            // (e.g. saving places/ranges while secret inputs are blank by design).
+            if (filled($companyData['api_url'] ?? null)) {
+                $settings->api_url = rtrim(trim((string) $companyData['api_url']), '/');
             }
-            if (array_key_exists('username', $companyData)) {
-                $settings->username = FactusClient::cleanCredential($companyData['username'] ?? '');
+            if (filled($companyData['client_id'] ?? null)) {
+                $settings->client_id = FactusClient::cleanCredential($companyData['client_id']);
             }
-            $settings->is_enabled = (bool) ($companyData['is_enabled'] ?? false);
+            if (filled($companyData['username'] ?? null)) {
+                $settings->username = FactusClient::cleanCredential($companyData['username']);
+            }
+            if (array_key_exists('is_enabled', $companyData)) {
+                $settings->is_enabled = (bool) $companyData['is_enabled'];
+            }
 
             $secretsTouched = false;
-            if (array_key_exists('client_secret', $companyData) && filled($companyData['client_secret'])) {
+            if (filled($companyData['client_secret'] ?? null)) {
                 $settings->client_secret = FactusClient::cleanCredential($companyData['client_secret']);
                 $secretsTouched = true;
             }
 
-            if (array_key_exists('password', $companyData) && filled($companyData['password'])) {
+            if (filled($companyData['password'] ?? null)) {
                 $settings->password = (string) $companyData['password'];
                 $secretsTouched = true;
             }
