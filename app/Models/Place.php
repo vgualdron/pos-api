@@ -23,5 +23,10 @@ class Place extends Model
     {
         return $this->hasOne(PlaceElectronicInvoiceSetting::class);
     }
+
+    public function posResolutionSetting()
+    {
+        return $this->hasOne(PlacePosResolutionSetting::class);
+    }
 }
 

@@ -25,6 +25,7 @@ use App\Http\Controllers\ProductCategoryController;
 use App\Http\Controllers\ProductFavoriteController;
 use App\Http\Controllers\PosDashboardController;
 use App\Http\Controllers\ElectronicInvoiceSettingController;
+use App\Http\Controllers\PosResolutionSettingController;
 
 Route::get('/health', function (Request $request) {
     return 'Health ... active';
@@ -61,6 +62,8 @@ Route::group(['middleware' => ['auth:api'], 'prefix' => '/companies'], function 
     Route::post('{companyId}/electronic-invoice/numbering-ranges', [ElectronicInvoiceSettingController::class, 'createNumberingRange']);
     Route::patch('{companyId}/electronic-invoice/numbering-ranges/{rangeId}/current', [ElectronicInvoiceSettingController::class, 'updateNumberingRangeCurrent']);
     Route::patch('{companyId}/electronic-invoice/numbering-ranges/{rangeId}/toggle-status', [ElectronicInvoiceSettingController::class, 'toggleNumberingRangeStatus']);
+    Route::get('{companyId}/pos-resolution', [PosResolutionSettingController::class, 'show']);
+    Route::put('{companyId}/pos-resolution', [PosResolutionSettingController::class, 'upsert']);
 
     Route::get('{id}', [CompanyController::class, 'show']);
     Route::post('/', [CompanyController::class, 'store']);
@@ -199,6 +202,7 @@ Route::group(['middleware' => ['auth:api'], 'prefix' => '/sales'], function () {
     Route::get('{id}', [SaleController::class, 'show']);
     Route::post('/', [SaleController::class, 'store']);
     Route::post('{id}/cancel', [SaleController::class, 'cancel']);
+    Route::post('{id}/retry-electronic-invoice', [SaleController::class, 'retryElectronicInvoice']);
     Route::post('{id}/returns', [SaleController::class, 'storeReturn']);
 });
 

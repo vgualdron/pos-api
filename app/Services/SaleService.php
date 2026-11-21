@@ -19,8 +19,10 @@ use Illuminate\Support\Facades\DB;
 
 class SaleService
 {
-    public function __construct(protected FactusInvoiceService $factusInvoice)
-    {
+    public function __construct(
+        protected FactusInvoiceService $factusInvoice,
+        protected PosResolutionSettingService $posResolution
+    ) {
     }
 
     public function catalogForUser($user, ?int $stationId = null)
@@ -226,7 +228,15 @@ class SaleService
                 ]);
             }
 
-            $sale->update([
+            $posFields = [];
+            if ($documentType === Sale::DOCUMENT_POS_TICKET) {
+                $allocated = $this->posResolution->allocateForPlace((int) $station->place_id);
+                if ($allocated) {
+                    $posFields = $allocated;
+                }
+            }
+
+            $sale->update(array_merge([
                 'subtotal' => $itemsSubtotal,
                 'discount_amount' => $discountAmount,
                 'discount_percent' => $discountPercent,
@@ -237,7 +247,7 @@ class SaleService
                 'payment_method' => $paymentMethod,
                 'amount_received' => $amountReceived,
                 'change_amount' => $changeAmount,
-            ]);
+            ], $posFields));
 
             return $sale->fresh(['lines.lots', 'lines.presentation', 'lines.product', 'payments', 'station', 'user', 'customer']);
         });
@@ -247,19 +257,52 @@ class SaleService
                 return $this->factusInvoice->emitForSale($sale);
             } catch (Exception $e) {
                 // Sale is already persisted; FE failure is recorded on the sale row.
-                return $sale->fresh([
-                    'lines.lots',
-                    'lines.presentation',
-                    'lines.product',
-                    'payments',
-                    'station',
-                    'user',
-                    'customer',
-                ]);
+                return $this->freshSale((int) $sale->id);
             }
         }
 
         return $sale;
+    }
+
+    public function retryElectronicInvoice(int $saleId): Sale
+    {
+        $sale = $this->find($saleId);
+
+        if (($sale->document_type ?? null) !== Sale::DOCUMENT_ELECTRONIC_INVOICE) {
+            throw new Exception('Esta venta no es factura electrónica.');
+        }
+
+        if (($sale->status ?? null) === Sale::STATUS_CANCELLED) {
+            throw new Exception('No se puede emitir FE de una venta anulada.');
+        }
+
+        if (! empty($sale->fe_cufe) || ($sale->fe_status ?? null) === 'accepted') {
+            throw new Exception('Esta venta ya tiene factura electrónica aceptada.');
+        }
+
+        $status = $sale->fe_status ?? null;
+        if (! in_array($status, ['failed', 'pending', 'submitted', null, ''], true)) {
+            throw new Exception('Esta venta no admite reintento de factura electrónica.');
+        }
+
+        try {
+            return $this->factusInvoice->emitForSale($sale);
+        } catch (Exception $e) {
+            return $this->freshSale($saleId);
+        }
+    }
+
+    protected function freshSale(int $saleId): Sale
+    {
+        return Sale::with([
+            'lines.lots',
+            'lines.presentation',
+            'lines.product',
+            'payments',
+            'station',
+            'user',
+            'customer',
+        ])->findOrFail($saleId);
     }
 
     protected function resolveDocumentType($value): string

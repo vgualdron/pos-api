@@ -113,6 +113,31 @@ class SaleController extends Controller
         }
     }
 
+    public function retryElectronicInvoice(Request $request, $id): JsonResponse
+    {
+        try {
+            $sale = $this->service->find((int) $id);
+            PlaceScope::assert($request->user(), (int) $sale->place_id, 'sales.allPlaces');
+
+            $sale = $this->service->retryElectronicInvoice((int) $id);
+            $accepted = ($sale->fe_status ?? null) === 'accepted' || ! empty($sale->fe_cufe);
+            $message = $accepted
+                ? 'Factura electrónica emitida'
+                : ('Falló el reintento de factura electrónica'
+                    . (! empty($sale->fe_error) ? ': ' . $sale->fe_error : ''));
+
+            return response()->json([
+                'message' => $message,
+                'data' => $sale,
+            ], $accepted ? 200 : 400);
+        } catch (Exception $e) {
+            return response()->json([
+                'error' => 'Error al reintentar la factura electrónica',
+                'message' => $e->getMessage(),
+            ], 400);
+        }
+    }
+
     public function storeReturn(Request $request, $id): JsonResponse
     {
         try {
