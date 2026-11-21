@@ -41,16 +41,16 @@ class ElectronicInvoiceSettingService
             $settings->provider = $companyData['provider'] ?? $settings->provider ?? 'factus';
             $settings->api_url = rtrim(trim((string) ($companyData['api_url'] ?? $settings->api_url ?? '')), '/');
             if (array_key_exists('client_id', $companyData)) {
-                $settings->client_id = trim((string) $companyData['client_id']);
+                $settings->client_id = FactusClient::cleanCredential($companyData['client_id'] ?? '');
             }
             if (array_key_exists('username', $companyData)) {
-                $settings->username = trim((string) $companyData['username']);
+                $settings->username = FactusClient::cleanCredential($companyData['username'] ?? '');
             }
             $settings->is_enabled = (bool) ($companyData['is_enabled'] ?? false);
 
             $secretsTouched = false;
             if (array_key_exists('client_secret', $companyData) && filled($companyData['client_secret'])) {
-                $settings->client_secret = trim((string) $companyData['client_secret']);
+                $settings->client_secret = FactusClient::cleanCredential($companyData['client_secret']);
                 $secretsTouched = true;
             }
 

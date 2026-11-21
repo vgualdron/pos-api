@@ -33,21 +33,28 @@ class FactusClient
             return $cachedToken;
         }
 
-        try {
-            $clientSecret = trim((string) $settings->client_secret);
-            $password = (string) $settings->password;
-        } catch (DecryptException $e) {
+        $clientId = self::cleanCredential($settings->client_id);
+        $username = self::cleanCredential($settings->username);
+        $clientSecret = self::cleanCredential($settings->client_secret);
+        $password = (string) ($settings->password ?? '');
+
+        if ($settings->hasClientSecret() && $clientSecret === '') {
             throw new Exception(
-                'No se pudieron descifrar las credenciales guardadas. Vuelva a pegar client secret y contraseña y guarde de nuevo.'
+                'El client secret está guardado pero no se pudo leer (cifrado inválido). Vuelva a pegarlo y guarde.'
+            );
+        }
+        if ($settings->hasPassword() && $password === '') {
+            throw new Exception(
+                'La contraseña está guardada pero no se pudo leer (cifrado inválido). Vuelva a pegarla y guarde.'
             );
         }
 
         $baseUrl = $settings->baseUrl();
         $payload = [
             'grant_type' => 'password',
-            'client_id' => trim((string) $settings->client_id),
+            'client_id' => $clientId,
             'client_secret' => $clientSecret,
-            'username' => trim((string) $settings->username),
+            'username' => $username,
             'password' => $password,
         ];
 
@@ -63,7 +70,16 @@ class FactusClient
         }
 
         if (! $response->successful()) {
-            throw new Exception($this->formatAuthError($response->status(), $response->json(), $response->body(), $baseUrl));
+            throw new Exception($this->formatAuthError(
+                $response->status(),
+                $response->json(),
+                $response->body(),
+                $baseUrl,
+                $clientId,
+                $username,
+                strlen($clientSecret),
+                strlen($password)
+            ));
         }
 
         $body = $response->json() ?: [];
@@ -156,25 +172,61 @@ class FactusClient
     }
 
 
-    protected function formatAuthError(int $status, ?array $json, string $body, string $baseUrl): string
+    public static function cleanCredential(?string $value): string
     {
+        $value = trim((string) $value);
+        if (strlen($value) >= 2) {
+            $first = $value[0];
+            $last = substr($value, -1);
+            if (($first === '"' && $last === '"') || ($first === "'" && $last === "'")) {
+                $value = trim(substr($value, 1, -1));
+            }
+        }
+
+        return $value;
+    }
+
+    protected function formatAuthError(
+        int $status,
+        ?array $json,
+        string $body,
+        string $baseUrl,
+        string $clientId,
+        string $username,
+        int $secretLen,
+        int $passwordLen
+    ): string {
         $raw = $this->extractError($json, $body, 'No se pudo autenticar con Factus.');
         $hint = '';
 
         $errorCode = is_array($json) ? ($json['error'] ?? null) : null;
         if ($errorCode === 'invalid_client') {
-            $hint = ' Revise client_id / client_secret y que correspondan al mismo ambiente que la URL (' . $baseUrl . ').';
+            $hint = ' Eso significa que Factus no reconoce el par client_id/client_secret para esa URL.'
+                . ' Si la URL es sandbox, las credenciales deben ser de sandbox (no de producción), y viceversa.';
         } elseif ($errorCode === 'invalid_grant') {
             $hint = ' Revise usuario (email) y contraseña de Factus.';
         }
 
+        $diag = sprintf(
+            ' [URL=%s | client_id=%s | username=%s | secret_len=%d | password_len=%d]',
+            $baseUrl,
+            $clientId !== '' ? $clientId : '(vacío)',
+            $username !== '' ? $username : '(vacío)',
+            $secretLen,
+            $passwordLen
+        );
+
         Log::warning('Factus auth failed', [
             'status' => $status,
             'base_url' => $baseUrl,
+            'client_id' => $clientId,
+            'username' => $username,
+            'secret_len' => $secretLen,
+            'password_len' => $passwordLen,
             'body' => mb_substr($body, 0, 500),
         ]);
 
-        return 'Autenticación Factus falló (HTTP ' . $status . '): ' . $raw . $hint;
+        return 'Autenticación Factus falló (HTTP ' . $status . '): ' . $raw . $hint . $diag;
     }
 
     protected function extractError(?array $json, string $body, string $fallback): string
