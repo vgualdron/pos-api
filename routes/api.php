@@ -188,6 +188,7 @@ Route::group(['middleware' => ['auth:api'], 'prefix' => '/sales'], function () {
     Route::get('{id}', [SaleController::class, 'show']);
     Route::post('/', [SaleController::class, 'store']);
     Route::post('{id}/cancel', [SaleController::class, 'cancel']);
+    Route::post('{id}/returns', [SaleController::class, 'storeReturn']);
 });
 
 Route::group(['middleware' => ['auth:api'], 'prefix' => '/register-sessions'], function () {

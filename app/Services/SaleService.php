@@ -40,7 +40,7 @@ class SaleService
             [$from, $to] = [$to->copy()->startOfDay(), $from->copy()->endOfDay()];
         }
 
-        return Sale::with(['lines.lots', 'payments', 'station', 'user', 'customer'])
+        return Sale::with(['lines.lots', 'payments', 'returns.payments', 'station', 'user', 'customer'])
             ->where('place_id', $placeId)
             ->whereBetween('sold_at', [$from, $to])
             ->orderByDesc('sold_at')
@@ -51,8 +51,17 @@ class SaleService
 
     public function find(int $id): Sale
     {
-        return Sale::with(['lines.lots', 'lines.presentation', 'lines.product', 'payments', 'station', 'user', 'customer'])
-            ->findOrFail($id);
+        return Sale::with([
+            'lines.lots',
+            'lines.presentation',
+            'lines.product',
+            'payments',
+            'returns.lines',
+            'returns.payments',
+            'station',
+            'user',
+            'customer',
+        ])->findOrFail($id);
     }
 
     public function create($user, array $data): Sale
@@ -268,13 +277,26 @@ class SaleService
                 throw new Exception('La venta ya está anulada.');
             }
 
+            $hasReturns = $sale->lines->contains(fn ($line) => (float) ($line->qty_returned ?? 0) > 0)
+                || (float) ($sale->returned_total ?? 0) > 0;
+            if ($hasReturns) {
+                throw new Exception('Esta venta ya tiene devoluciones. Use devolución parcial para el resto.');
+            }
+
             foreach ($sale->lines as $line) {
                 foreach ($line->lots as $saleLineLot) {
                     $lot = StockLot::lockForUpdate()->find($saleLineLot->stock_lot_id);
                     if (!$lot) {
                         continue;
                     }
-                    $lot->qty_remaining = round(((float) $lot->qty_remaining) + (float) $saleLineLot->qty_base, 4);
+                    $restorable = round(
+                        (float) $saleLineLot->qty_base - (float) ($saleLineLot->qty_base_returned ?? 0),
+                        4
+                    );
+                    if ($restorable <= 0) {
+                        continue;
+                    }
+                    $lot->qty_remaining = round(((float) $lot->qty_remaining) + $restorable, 4);
                     $lot->save();
                 }
             }

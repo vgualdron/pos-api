@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Sale;
+use App\Services\SaleReturnService;
 use App\Services\SaleService;
 use App\Support\PlaceScope;
 use Exception;
@@ -12,8 +13,10 @@ use Illuminate\Validation\Rule;
 
 class SaleController extends Controller
 {
-    public function __construct(protected SaleService $service)
-    {
+    public function __construct(
+        protected SaleService $service,
+        protected SaleReturnService $returnService
+    ) {
     }
 
     public function catalog(Request $request): JsonResponse
@@ -98,6 +101,28 @@ class SaleController extends Controller
             return response()->json(['message' => 'Venta anulada', 'data' => $sale]);
         } catch (Exception $e) {
             return response()->json(['error' => 'Error al anular la venta', 'message' => $e->getMessage()], 400);
+        }
+    }
+
+    public function storeReturn(Request $request, $id): JsonResponse
+    {
+        try {
+            $data = $request->validate([
+                'reason' => 'nullable|string|max:255',
+                'station_id' => 'nullable|integer|exists:stations,id',
+                'lines' => 'required|array|min:1',
+                'lines.*.sale_line_id' => 'required|integer|exists:sale_lines,id',
+                'lines.*.qty' => 'required|numeric|min:0.0001',
+                'payments' => 'nullable|array|min:1',
+                'payments.*.payment_method' => ['required_with:payments', Rule::in(Sale::PAYMENT_METHODS)],
+                'payments.*.amount' => 'required_with:payments|numeric|min:0.01',
+            ]);
+
+            $sale = $this->returnService->create($request->user(), (int) $id, $data);
+
+            return response()->json(['message' => 'Devolución registrada', 'data' => $sale], 201);
+        } catch (Exception $e) {
+            return response()->json(['error' => 'Error al devolver', 'message' => $e->getMessage()], 400);
         }
     }
 }

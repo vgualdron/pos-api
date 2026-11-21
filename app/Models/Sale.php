@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class Sale extends Model
 {
     public const STATUS_COMPLETED = 'completed';
+    public const STATUS_PARTIALLY_RETURNED = 'partially_returned';
     public const STATUS_CANCELLED = 'cancelled';
 
     public const PAYMENT_CASH = 'cash';
@@ -45,6 +46,8 @@ class Sale extends Model
         'tax_total',
         'total',
         'cost_total',
+        'returned_total',
+        'returned_cost_total',
         'status',
         'payment_method',
         'amount_received',
@@ -64,11 +67,13 @@ class Sale extends Model
         'tax_total' => 'float',
         'total' => 'float',
         'cost_total' => 'float',
+        'returned_total' => 'float',
+        'returned_cost_total' => 'float',
         'amount_received' => 'float',
         'change_amount' => 'float',
     ];
 
-    protected $appends = ['profit'];
+    protected $appends = ['profit', 'net_total'];
 
     protected $with = ['lines', 'payments'];
 
@@ -80,6 +85,11 @@ class Sale extends Model
     public function payments(): HasMany
     {
         return $this->hasMany(SalePayment::class)->orderBy('sort_order')->orderBy('id');
+    }
+
+    public function returns(): HasMany
+    {
+        return $this->hasMany(SaleReturn::class)->orderByDesc('returned_at')->orderByDesc('id');
     }
 
     public function station(): BelongsTo
@@ -102,12 +112,24 @@ class Sale extends Model
         return $this->belongsTo(User::class, 'cancelled_by');
     }
 
+    public function getNetTotalAttribute(): float
+    {
+        if ($this->status === self::STATUS_CANCELLED) {
+            return 0.0;
+        }
+
+        return round(((float) $this->total) - ((float) ($this->returned_total ?? 0)), 2);
+    }
+
     public function getProfitAttribute(): float
     {
         if ($this->status === self::STATUS_CANCELLED) {
             return 0.0;
         }
 
-        return round(((float) $this->total) - ((float) $this->cost_total), 2);
+        $netSales = ((float) $this->total) - ((float) ($this->returned_total ?? 0));
+        $netCost = ((float) $this->cost_total) - ((float) ($this->returned_cost_total ?? 0));
+
+        return round($netSales - $netCost, 2);
     }
 }

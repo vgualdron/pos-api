@@ -30,12 +30,21 @@ class PosDashboardService
             ->where('place_id', $placeId)
             ->whereBetween('sold_at', [$from, $to]);
 
-        $completed = (clone $salesQuery)->where('status', Sale::STATUS_COMPLETED);
+        $completed = (clone $salesQuery)->whereIn('status', [
+            Sale::STATUS_COMPLETED,
+            Sale::STATUS_PARTIALLY_RETURNED,
+        ]);
         $cancelledCount = (clone $salesQuery)->where('status', Sale::STATUS_CANCELLED)->count();
 
         $salesCount = (clone $completed)->count();
-        $salesTotal = round((float) (clone $completed)->sum('total'), 2);
-        $salesProfit = round((float) (clone $completed)->sum(DB::raw('total - cost_total')), 2);
+        $salesTotal = round(
+            (float) (clone $completed)->sum(DB::raw('total - COALESCE(returned_total, 0)')),
+            2
+        );
+        $salesProfit = round(
+            (float) (clone $completed)->sum(DB::raw('(total - COALESCE(returned_total, 0)) - (cost_total - COALESCE(returned_cost_total, 0))')),
+            2
+        );
         $discountTotal = round((float) (clone $completed)->sum('discount_amount'), 2);
         $taxTotal = round((float) (clone $completed)->sum('tax_total'), 2);
 
@@ -48,7 +57,7 @@ class PosDashboardService
         $paymentRows = DB::table('sale_payments')
             ->join('sales', 'sales.id', '=', 'sale_payments.sale_id')
             ->where('sales.place_id', $placeId)
-            ->where('sales.status', Sale::STATUS_COMPLETED)
+            ->whereIn('sales.status', [Sale::STATUS_COMPLETED, Sale::STATUS_PARTIALLY_RETURNED])
             ->whereBetween('sales.sold_at', [$from, $to])
             ->select(
                 'sale_payments.payment_method',
@@ -67,6 +76,29 @@ class PosDashboardService
                 'count' => (int) $row->sales_count,
                 'total' => round((float) $row->sales_total, 2),
             ];
+        }
+
+        $refundRows = DB::table('sale_return_payments')
+            ->join('sale_returns', 'sale_returns.id', '=', 'sale_return_payments.sale_return_id')
+            ->join('sales', 'sales.id', '=', 'sale_returns.sale_id')
+            ->where('sales.place_id', $placeId)
+            ->whereBetween('sale_returns.returned_at', [$from, $to])
+            ->select(
+                'sale_return_payments.payment_method',
+                DB::raw('SUM(sale_return_payments.amount) as refund_total')
+            )
+            ->groupBy('sale_return_payments.payment_method')
+            ->get();
+
+        foreach ($refundRows as $row) {
+            $method = $row->payment_method ?: 'other';
+            if (!isset($byPayment[$method])) {
+                $byPayment[$method] = ['count' => 0, 'total' => 0.0];
+            }
+            $byPayment[$method]['total'] = round(
+                (float) $byPayment[$method]['total'] - (float) $row->refund_total,
+                2
+            );
         }
 
         $openSessions = RegisterSession::query()

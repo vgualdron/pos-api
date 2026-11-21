@@ -11,11 +11,13 @@ class SaleLineLot extends Model
         'sale_line_id',
         'stock_lot_id',
         'qty_base',
+        'qty_base_returned',
         'unit_cost',
     ];
 
     protected $casts = [
         'qty_base' => 'float',
+        'qty_base_returned' => 'float',
         'unit_cost' => 'float',
     ];
 

@@ -13,6 +13,7 @@ class SaleLine extends Model
         'product_id',
         'product_presentation_id',
         'qty',
+        'qty_returned',
         'factor',
         'qty_base',
         'unit_price',
@@ -29,6 +30,7 @@ class SaleLine extends Model
 
     protected $casts = [
         'qty' => 'float',
+        'qty_returned' => 'float',
         'factor' => 'float',
         'qty_base' => 'float',
         'unit_price' => 'float',
@@ -40,7 +42,7 @@ class SaleLine extends Model
         'cost_total' => 'float',
     ];
 
-    protected $appends = ['profit'];
+    protected $appends = ['profit', 'qty_remaining'];
 
     protected $with = ['lots', 'presentation', 'product'];
 
@@ -67,6 +69,11 @@ class SaleLine extends Model
     public function lots(): HasMany
     {
         return $this->hasMany(SaleLineLot::class);
+    }
+
+    public function getQtyRemainingAttribute(): float
+    {
+        return round(max(0, ((float) $this->qty) - ((float) ($this->qty_returned ?? 0))), 4);
     }
 
     public function getProfitAttribute(): float

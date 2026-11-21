@@ -123,7 +123,7 @@ class RegisterSessionService
     {
         $sales = Sale::with('payments')
             ->where('register_session_id', $session->id)
-            ->where('status', Sale::STATUS_COMPLETED)
+            ->whereIn('status', [Sale::STATUS_COMPLETED, Sale::STATUS_PARTIALLY_RETURNED])
             ->get();
 
         $cash = 0.0;
@@ -154,6 +154,24 @@ class RegisterSessionService
                 $transfer += $total;
             } else {
                 $cash += $total;
+            }
+        }
+
+        // Subtract refunds recorded in this register session (partial returns).
+        $refundPayments = \App\Models\SaleReturnPayment::query()
+            ->whereHas('saleReturn', function ($query) use ($session) {
+                $query->where('register_session_id', $session->id);
+            })
+            ->get();
+
+        foreach ($refundPayments as $payment) {
+            $amount = (float) $payment->amount;
+            if ($payment->payment_method === Sale::PAYMENT_CARD) {
+                $card -= $amount;
+            } elseif ($payment->payment_method === Sale::PAYMENT_TRANSFER) {
+                $transfer -= $amount;
+            } else {
+                $cash -= $amount;
             }
         }
 
