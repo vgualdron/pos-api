@@ -17,6 +17,16 @@ class Sale extends Model
     public const PAYMENT_TRANSFER = 'transfer';
     public const PAYMENT_MIXED = 'mixed';
 
+    public const DOCUMENT_NONE = 'none';
+    public const DOCUMENT_POS_TICKET = 'pos_ticket';
+    public const DOCUMENT_ELECTRONIC_INVOICE = 'electronic_invoice';
+
+    public const DOCUMENT_TYPES = [
+        self::DOCUMENT_NONE,
+        self::DOCUMENT_POS_TICKET,
+        self::DOCUMENT_ELECTRONIC_INVOICE,
+    ];
+
     /** Tender methods that can appear on sale_payments rows. */
     public const PAYMENT_METHODS = [
         self::PAYMENT_CASH,
@@ -49,6 +59,15 @@ class Sale extends Model
         'returned_total',
         'returned_cost_total',
         'status',
+        'document_type',
+        'fe_status',
+        'fe_reference_code',
+        'fe_number',
+        'fe_cufe',
+        'fe_qr_url',
+        'fe_public_url',
+        'fe_error',
+        'fe_emitted_at',
         'payment_method',
         'amount_received',
         'change_amount',
@@ -60,6 +79,7 @@ class Sale extends Model
     protected $casts = [
         'sold_at' => 'datetime',
         'cancelled_at' => 'datetime',
+        'fe_emitted_at' => 'datetime',
         'subtotal' => 'float',
         'discount_amount' => 'float',
         'discount_percent' => 'float',
@@ -105,6 +125,11 @@ class Sale extends Model
     public function customer(): BelongsTo
     {
         return $this->belongsTo(Customer::class);
+    }
+
+    public function place(): BelongsTo
+    {
+        return $this->belongsTo(Place::class);
     }
 
     public function cancelledByUser(): BelongsTo

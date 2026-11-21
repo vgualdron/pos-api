@@ -9,6 +9,7 @@ use App\Models\Sale;
 use App\Models\SalePayment;
 use App\Models\Station;
 use App\Models\StockLot;
+use App\Services\Factus\FactusInvoiceService;
 use App\Support\PlaceScope;
 use App\Support\PosStation;
 use App\Support\SalePricing;
@@ -18,6 +19,10 @@ use Illuminate\Support\Facades\DB;
 
 class SaleService
 {
+    public function __construct(protected FactusInvoiceService $factusInvoice)
+    {
+    }
+
     public function catalogForUser($user, ?int $stationId = null)
     {
         $station = PosStation::resolve($user, $stationId);
@@ -75,8 +80,13 @@ class SaleService
         }
 
         $customerId = $this->resolveCustomerId($station->place_id, $data['customer_id'] ?? null);
+        $documentType = $this->resolveDocumentType($data['document_type'] ?? null);
 
-        return DB::transaction(function () use ($station, $user, $session, $lines, $data, $customerId) {
+        if ($documentType === Sale::DOCUMENT_ELECTRONIC_INVOICE && ! $customerId) {
+            throw new Exception('Para factura electrónica debe seleccionar un cliente.');
+        }
+
+        $sale = DB::transaction(function () use ($station, $user, $session, $lines, $data, $customerId, $documentType) {
             $prepared = [];
             $itemsSubtotal = 0.0;
 
@@ -153,6 +163,7 @@ class SaleService
                 'total' => 0,
                 'cost_total' => 0,
                 'status' => Sale::STATUS_COMPLETED,
+                'document_type' => $documentType,
                 'payment_method' => Sale::PAYMENT_CASH,
             ]);
 
@@ -230,6 +241,35 @@ class SaleService
 
             return $sale->fresh(['lines.lots', 'lines.presentation', 'lines.product', 'payments', 'station', 'user', 'customer']);
         });
+
+        if ($documentType === Sale::DOCUMENT_ELECTRONIC_INVOICE) {
+            try {
+                return $this->factusInvoice->emitForSale($sale);
+            } catch (Exception $e) {
+                // Sale is already persisted; FE failure is recorded on the sale row.
+                return $sale->fresh([
+                    'lines.lots',
+                    'lines.presentation',
+                    'lines.product',
+                    'payments',
+                    'station',
+                    'user',
+                    'customer',
+                ]);
+            }
+        }
+
+        return $sale;
+    }
+
+    protected function resolveDocumentType($value): string
+    {
+        $type = is_string($value) ? trim($value) : '';
+        if ($type === '' || ! in_array($type, Sale::DOCUMENT_TYPES, true)) {
+            return Sale::DOCUMENT_POS_TICKET;
+        }
+
+        return $type;
     }
 
     protected function resolveDiscount(array $data, float $itemsSubtotal): array

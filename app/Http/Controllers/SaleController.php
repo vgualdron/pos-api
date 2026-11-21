@@ -81,10 +81,19 @@ class SaleController extends Controller
                 'discount_percent' => 'nullable|numeric|min:0|max:100',
                 'customer_id' => 'nullable|integer|exists:customers,id',
                 'station_id' => 'nullable|integer|exists:stations,id',
+                'document_type' => ['nullable', Rule::in(Sale::DOCUMENT_TYPES)],
             ]);
             $sale = $this->service->create($request->user(), $data);
+            $message = 'Venta registrada';
+            if (($sale->document_type ?? null) === Sale::DOCUMENT_ELECTRONIC_INVOICE) {
+                if (($sale->fe_status ?? null) === 'accepted') {
+                    $message = 'Venta registrada y factura electrónica emitida';
+                } elseif (($sale->fe_status ?? null) === 'failed') {
+                    $message = 'Venta registrada, pero falló la factura electrónica';
+                }
+            }
 
-            return response()->json(['message' => 'Venta registrada', 'data' => $sale], 201);
+            return response()->json(['message' => $message, 'data' => $sale], 201);
         } catch (Exception $e) {
             return response()->json(['error' => 'Error al vender', 'message' => $e->getMessage()], 400);
         }
