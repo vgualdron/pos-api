@@ -118,28 +118,42 @@ class ElectronicInvoiceSettingService
             throw $e;
         }
 
+        $ranges = [];
+        $rangesError = null;
         try {
             $ranges = $this->factus->getNumberingRanges($settings);
         } catch (Exception $e) {
-            $settings->tested_at = now();
-            $settings->last_error = 'Token OK, pero falló al listar rangos: ' . $e->getMessage();
-            $settings->save();
+            $rangesError = $e->getMessage();
+        }
 
-            throw new Exception($settings->last_error);
+        $dianRanges = [];
+        $dianError = null;
+        try {
+            $dianRanges = $this->factus->getDianNumberingRanges($settings);
+        } catch (Exception $e) {
+            $dianError = $e->getMessage();
         }
 
         $settings->tested_at = now();
-        $settings->last_error = null;
+        $settings->last_error = count($ranges) === 0
+            ? 'Conexión OK, pero no hay rangos de numeración creados en Factus. Debe crear/asociar un rango en Factus y volver a probar.'
+            : null;
         $settings->save();
 
         return [
             'ok' => true,
             'tested_at' => optional($settings->tested_at)->toIso8601String(),
             'numbering_ranges' => $this->mapRanges($ranges),
+            'dian_numbering_ranges' => $dianRanges,
+            'ranges_error' => $rangesError,
+            'dian_error' => $dianError,
             'api_url_used' => $settings->baseUrl(),
+            'hint' => count($ranges) === 0
+                ? 'Auth OK. En sandbox debes tener al menos un rango creado en Factus (panel o API). Luego vuelve a probar para ver el id y asignarlo a la sede.'
+                : null,
         ];
-
     }
+
 
     public function numberingRanges(int $companyId): array
     {

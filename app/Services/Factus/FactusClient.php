@@ -108,30 +108,79 @@ class FactusClient
 
     public function getNumberingRanges(CompanyElectronicInvoiceSetting $settings): array
     {
+        // Default Factus behaviour already returns non-deleted ranges; avoid strict filters
+        // that can hide sandbox ranges depending on account setup.
+        $attempts = [
+            [],
+            ['filter' => ['trashed' => 'with']],
+            ['filter' => ['is_active' => '1']],
+        ];
+
+        $lastPayload = [];
+        $lastError = null;
+
+        foreach ($attempts as $query) {
+            try {
+                $response = $this->authorized($settings)
+                    ->get($settings->baseUrl() . '/v2/numbering-ranges', $query);
+            } catch (ConnectionException $e) {
+                throw new Exception('No se pudo conectar con Factus al listar rangos: ' . $e->getMessage());
+            }
+
+            if (! $response->successful()) {
+                $lastError = 'Factus rechazó el listado de rangos (HTTP ' . $response->status() . '): '
+                    . $this->extractError($response->json(), $response->body(), 'Error desconocido');
+                continue;
+            }
+
+            $payload = $response->json() ?: [];
+            $lastPayload = $payload;
+            $rows = $this->extractDataRows($payload);
+            if (count($rows) > 0) {
+                return $rows;
+            }
+        }
+
+        if ($lastError && empty($lastPayload)) {
+            throw new Exception($lastError);
+        }
+
+        return $this->extractDataRows($lastPayload);
+    }
+
+    public function getDianNumberingRanges(CompanyElectronicInvoiceSetting $settings): array
+    {
         try {
             $response = $this->authorized($settings)
-                ->get($settings->baseUrl() . '/v2/numbering-ranges', [
-                    'filter' => ['is_active' => 1],
-                ]);
+                ->get($settings->baseUrl() . '/v2/numbering-ranges/dian');
         } catch (ConnectionException $e) {
-            throw new Exception('No se pudo conectar con Factus al listar rangos: ' . $e->getMessage());
+            throw new Exception('No se pudo consultar rangos DIAN en Factus: ' . $e->getMessage());
         }
 
         if (! $response->successful()) {
             throw new Exception(
-                'Factus rechazó el listado de rangos (HTTP ' . $response->status() . '): '
+                'Factus rechazó rangos DIAN (HTTP ' . $response->status() . '): '
                 . $this->extractError($response->json(), $response->body(), 'Error desconocido')
             );
         }
 
-        $payload = $response->json() ?: [];
+        return $this->extractDataRows($response->json() ?: []);
+    }
 
+    protected function extractDataRows(array $payload): array
+    {
         if (isset($payload['data']) && is_array($payload['data'])) {
-            return $payload['data'];
+            return array_values($payload['data']);
         }
 
-        return is_array($payload) ? $payload : [];
+        // Some endpoints return a bare list
+        if ($payload !== [] && array_keys($payload) === range(0, count($payload) - 1)) {
+            return $payload;
+        }
+
+        return [];
     }
+
 
     public function postJson(CompanyElectronicInvoiceSetting $settings, string $path, array $body): array
     {
