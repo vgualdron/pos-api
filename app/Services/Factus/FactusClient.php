@@ -108,13 +108,22 @@ class FactusClient
 
     public function getNumberingRanges(CompanyElectronicInvoiceSetting $settings): array
     {
-        // Default Factus behaviour already returns non-deleted ranges; avoid strict filters
-        // that can hide sandbox ranges depending on account setup.
+        // Match Postman query style: filter[document]=21&filter[is_active]=1
+        // Use flat keys so Guzzle encodes them exactly like Postman.
         $attempts = [
+            [
+                'filter[document]' => '21',
+                'filter[is_active]' => '1',
+            ],
+            [
+                'filter[is_active]' => '1',
+            ],
             [],
-            ['filter' => ['trashed' => 'with']],
-            ['filter' => ['is_active' => '1']],
+            [
+                'filter[trashed]' => 'with',
+            ],
         ];
+
 
         $lastPayload = [];
         $lastError = null;

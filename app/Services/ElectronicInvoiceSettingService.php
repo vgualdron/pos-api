@@ -146,9 +146,8 @@ class ElectronicInvoiceSettingService
         }
 
         $settings->tested_at = now();
-        $settings->last_error = count($ranges) === 0
-            ? 'Conexión OK, pero no hay rangos de numeración creados en Factus. Debe crear/asociar un rango en Factus y volver a probar.'
-            : null;
+        // last_error is only for real failures — empty ranges is a warning, not an auth error
+        $settings->last_error = null;
         $settings->save();
 
         return [
@@ -159,6 +158,9 @@ class ElectronicInvoiceSettingService
             'ranges_error' => $rangesError,
             'dian_error' => $dianError,
             'api_url_used' => $settings->baseUrl(),
+            'warning' => count($ranges) === 0
+                ? 'Conexión OK, pero no hay rangos en Factus. Créalos en el panel o en la pestaña Rangos.'
+                : null,
             'hint' => count($ranges) === 0
                 ? 'Auth OK. En sandbox debes tener al menos un rango creado en Factus (panel o API). Luego vuelve a probar para ver el id y asignarlo a la sede.'
                 : null,
