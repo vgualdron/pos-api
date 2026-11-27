@@ -27,9 +27,7 @@ class SaleReturnService
 
     public function create($user, int $saleId, array $data): Sale
     {
-        $station = PosStation::resolve($user, isset($data['station_id']) ? (int) $data['station_id'] : null);
-
-        $sale = DB::transaction(function () use ($user, $saleId, $data, $station) {
+        $sale = DB::transaction(function () use ($user, $saleId, $data) {
             $sale = Sale::with(['lines.lots', 'payments', 'returns.payments'])
                 ->lockForUpdate()
                 ->findOrFail($saleId);
@@ -40,11 +38,20 @@ class SaleReturnService
                 throw new Exception('No se puede devolver una venta anulada.');
             }
 
+            $stationId = isset($data['station_id']) && $data['station_id'] !== ''
+                ? (int) $data['station_id']
+                : null;
+            if (! $stationId && $sale->station_id) {
+                $stationId = (int) $sale->station_id;
+            }
+
+            $station = PosStation::resolve($user, $stationId);
+
             if ((int) $station->place_id !== (int) $sale->place_id) {
                 throw new Exception('La caja no pertenece a la sede de la venta.');
             }
 
-            $session = $this->requireOpenSession($station, $user);
+            $session = $this->findOpenSession($station);
             $requestLines = $data['lines'] ?? [];
             if (!is_array($requestLines) || count($requestLines) === 0) {
                 throw new Exception('Seleccione al menos un ítem para devolver.');
@@ -109,7 +116,7 @@ class SaleReturnService
                 'place_id' => $sale->place_id,
                 'station_id' => $station->id,
                 'user_id' => $user->id,
-                'register_session_id' => $session->id,
+                'register_session_id' => $session?->id,
                 'returned_at' => Carbon::now(),
                 'reason' => isset($data['reason']) ? trim((string) $data['reason']) : null,
                 'subtotal' => $subtotal,
@@ -354,18 +361,12 @@ class SaleReturnService
         return $payments;
     }
 
-    protected function requireOpenSession(Station $station, $user): RegisterSession
+    protected function findOpenSession(Station $station): ?RegisterSession
     {
-        $open = RegisterSession::where('station_id', $station->id)
+        return RegisterSession::where('station_id', $station->id)
             ->where('status', RegisterSession::STATUS_OPEN)
             ->lockForUpdate()
             ->latest('id')
             ->first();
-
-        if (!$open) {
-            throw new Exception('Abra la caja antes de registrar una devolución.');
-        }
-
-        return $open;
     }
 }
