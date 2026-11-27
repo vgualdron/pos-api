@@ -36,11 +36,12 @@ class PosPermissionsSeeder extends Seeder
             ['name' => 'product-categories.edit', 'label' => 'Editar categorías', 'subgroup' => 'Categorías', 'route' => '/product-category', 'icon' => 'category', 'order' => 1],
             ['name' => 'product-categories.delete', 'label' => 'Eliminar categorías', 'subgroup' => 'Categorías', 'route' => '/product-category', 'icon' => 'category', 'order' => 1],
             ['name' => 'product-categories.allPlaces', 'label' => 'Categorías de todas las sedes', 'subgroup' => 'Categorías', 'route' => '/product-category', 'icon' => 'category', 'order' => 1],
-            ['name' => 'dining-tables.list', 'label' => 'Listar mesas', 'subgroup' => 'Mesas', 'route' => '/dining-table', 'icon' => 'table_restaurant', 'order' => 1],
-            ['name' => 'dining-tables.create', 'label' => 'Crear mesas', 'subgroup' => 'Mesas', 'route' => '/dining-table', 'icon' => 'table_restaurant', 'order' => 1],
-            ['name' => 'dining-tables.edit', 'label' => 'Editar mesas', 'subgroup' => 'Mesas', 'route' => '/dining-table', 'icon' => 'table_restaurant', 'order' => 1],
-            ['name' => 'dining-tables.delete', 'label' => 'Eliminar mesas', 'subgroup' => 'Mesas', 'route' => '/dining-table', 'icon' => 'table_restaurant', 'order' => 1],
-            ['name' => 'dining-tables.allPlaces', 'label' => 'Mesas de todas las sedes', 'subgroup' => 'Mesas', 'route' => '/dining-table', 'icon' => 'table_restaurant', 'order' => 1],
+            ['name' => 'dining-tables.attend', 'label' => 'Atender mesas', 'subgroup' => 'Atender mesas', 'route' => '/tables', 'icon' => 'table_restaurant', 'order' => 5],
+            ['name' => 'dining-tables.list', 'label' => 'Listar mesas', 'subgroup' => 'Mesas', 'route' => '/dining-table', 'icon' => 'table_bar', 'order' => 1],
+            ['name' => 'dining-tables.create', 'label' => 'Crear mesas', 'subgroup' => 'Mesas', 'route' => '/dining-table', 'icon' => 'table_bar', 'order' => 1],
+            ['name' => 'dining-tables.edit', 'label' => 'Editar mesas', 'subgroup' => 'Mesas', 'route' => '/dining-table', 'icon' => 'table_bar', 'order' => 1],
+            ['name' => 'dining-tables.delete', 'label' => 'Eliminar mesas', 'subgroup' => 'Mesas', 'route' => '/dining-table', 'icon' => 'table_bar', 'order' => 1],
+            ['name' => 'dining-tables.allPlaces', 'label' => 'Mesas de todas las sedes', 'subgroup' => 'Mesas', 'route' => '/dining-table', 'icon' => 'table_bar', 'order' => 1],
             ['name' => 'dining-zones.list', 'label' => 'Listar zonas', 'subgroup' => 'Zonas', 'route' => '/dining-zone', 'icon' => 'map', 'order' => 1],
             ['name' => 'dining-zones.create', 'label' => 'Crear zonas', 'subgroup' => 'Zonas', 'route' => '/dining-zone', 'icon' => 'map', 'order' => 1],
             ['name' => 'dining-zones.edit', 'label' => 'Editar zonas', 'subgroup' => 'Zonas', 'route' => '/dining-zone', 'icon' => 'map', 'order' => 1],
@@ -60,8 +61,8 @@ class PosPermissionsSeeder extends Seeder
             ['name' => 'customers.delete', 'label' => 'Eliminar clientes', 'subgroup' => 'Clientes', 'route' => '/customer', 'icon' => 'groups', 'order' => 3],
             ['name' => 'customers.allPlaces', 'label' => 'Clientes de todas las sedes', 'subgroup' => 'Clientes', 'route' => '/customer', 'icon' => 'groups', 'order' => 3],
             ['name' => 'sales.list', 'label' => 'Listar ventas', 'subgroup' => 'Ventas', 'route' => '/sale', 'icon' => 'receipt_long', 'order' => 4],
-            ['name' => 'sales.create', 'label' => 'Cobrar en caja', 'subgroup' => 'Caja', 'route' => '/register', 'icon' => 'point_of_sale', 'order' => 5],
-            ['name' => 'sales.overridePrice', 'label' => 'Cambiar precio en venta', 'subgroup' => 'Caja', 'route' => '/register', 'icon' => 'point_of_sale', 'order' => 5],
+            ['name' => 'sales.create', 'label' => 'Cobrar en caja', 'subgroup' => 'Caja', 'route' => '/register', 'icon' => 'point_of_sale', 'order' => 6],
+            ['name' => 'sales.overridePrice', 'label' => 'Cambiar precio en venta', 'subgroup' => 'Caja', 'route' => '/register', 'icon' => 'point_of_sale', 'order' => 6],
             ['name' => 'sales.allPlaces', 'label' => 'Ventas de todas las sedes', 'subgroup' => 'Ventas', 'route' => '/sale', 'icon' => 'receipt_long', 'order' => 4],
             ['name' => 'register-sessions.list', 'label' => 'Historial de cierres', 'subgroup' => 'Cierres de caja', 'route' => '/register-session', 'icon' => 'account_balance_wallet', 'order' => 6],
             ['name' => 'register-sessions.allPlaces', 'label' => 'Cierres de todas las sedes', 'subgroup' => 'Cierres de caja', 'route' => '/register-session', 'icon' => 'account_balance_wallet', 'order' => 6],
@@ -86,18 +87,16 @@ class PosPermissionsSeeder extends Seeder
 
         $caja = \App\Models\Role::updateOrCreate(
             ['name' => 'CAJA', 'guard_name' => 'api'],
-            ['route' => '/register']
+            ['route' => '/tables']
         );
         $caja->syncPermissions([
-            'sales.create',
+            'dining-tables.attend',
+            'dining-tables.edit',
             'products.list',
             'products.view',
             'product-categories.list',
             'customers.list',
             'customers.create',
-            'dining-tables.list',
-            'dining-tables.edit',
-            'dining-zones.list',
         ]);
     }
 }
