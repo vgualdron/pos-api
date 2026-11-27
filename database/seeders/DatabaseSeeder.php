@@ -62,6 +62,7 @@ class DatabaseSeeder extends Seeder
         $this->call(AdminRoleSeeder::class);
         $this->call(PinchetasBootstrapSeeder::class);
         $this->call(PinchetasCatalogSeeder::class);
+        $this->call(PinchetasDiningTablesSeeder::class);
 
         $role = Role::where('name', 'ADMINISTRADOR')
             ->where('guard_name', 'api')
