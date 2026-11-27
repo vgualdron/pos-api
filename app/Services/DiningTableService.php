@@ -11,7 +11,7 @@ class DiningTableService
     public function byPlace(int $placeId, bool $onlyActive = false)
     {
         $query = DiningTable::query()
-            ->where('place_id', $placeId)
+            ->where('dining_tables.place_id', $placeId)
             ->with('diningZone')
             ->leftJoin('dining_zones', 'dining_zones.id', '=', 'dining_tables.dining_zone_id')
             ->orderBy('dining_zones.sort_order')
