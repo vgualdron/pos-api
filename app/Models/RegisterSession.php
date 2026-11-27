@@ -24,6 +24,7 @@ class RegisterSession extends Model
         'card_sales_total',
         'transfer_sales_total',
         'sales_count',
+        'tips_total',
         'difference_cash',
         'notes',
         'status',
@@ -38,6 +39,7 @@ class RegisterSession extends Model
         'cash_sales_total' => 'float',
         'card_sales_total' => 'float',
         'transfer_sales_total' => 'float',
+        'tips_total' => 'float',
         'difference_cash' => 'float',
         'sales_count' => 'integer',
     ];

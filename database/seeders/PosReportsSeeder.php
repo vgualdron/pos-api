@@ -222,6 +222,7 @@ SELECT
   DATE_FORMAT(rs.closed_at, '%d/%m/%Y %H:%i') AS cierre,
   ROUND(rs.opening_cash, 0) AS _base,
   ROUND(COALESCE(rs.cash_sales_total, 0), 0) AS _ventas_efectivo,
+  ROUND(COALESCE(rs.tips_total, 0), 0) AS _propinas,
   ROUND(COALESCE(rs.expected_cash, 0), 0) AS _efectivo_esperado,
   ROUND(COALESCE(rs.closing_cash, 0), 0) AS _efectivo_contado,
   ROUND(COALESCE(rs.difference_cash, 0), 0) AS _diferencia,

@@ -110,6 +110,7 @@ class RegisterSessionService
                 'card_sales_total' => $summary['card_sales_total'],
                 'transfer_sales_total' => $summary['transfer_sales_total'],
                 'sales_count' => $summary['sales_count'],
+                'tips_total' => $summary['tips_total'],
                 'difference_cash' => $difference,
                 'notes' => isset($data['notes']) ? trim((string) $data['notes']) : null,
                 'status' => RegisterSession::STATUS_CLOSED,
@@ -175,6 +176,8 @@ class RegisterSessionService
             }
         }
 
+        $tipsTotal = round((float) $sales->sum(fn (Sale $sale) => (float) ($sale->tip_amount ?? 0)), 2);
+
         $opening = (float) $session->opening_cash;
         $expected = round($opening + $cash, 2);
 
@@ -186,6 +189,7 @@ class RegisterSessionService
             'transfer_sales_total' => round($transfer, 2),
             'sales_count' => $sales->count(),
             'sales_total' => round($cash + $card + $transfer, 2),
+            'tips_total' => $tipsTotal,
             'expected_cash' => $expected,
         ];
     }

@@ -300,6 +300,8 @@ class TableOrderService
             'discount_percent' => array_key_exists('discount_percent', $data)
                 ? $data['discount_percent']
                 : ($order->discount_percent ?? null),
+            'tip_amount' => $data['tip_amount'] ?? 0,
+            'tip_percent' => $data['tip_percent'] ?? null,
             'customer_id' => $data['customer_id'] ?? null,
             'document_type' => $data['document_type'] ?? Sale::DOCUMENT_POS_TICKET,
             'lines' => $order->lines->map(fn (TableOrderLine $line) => [

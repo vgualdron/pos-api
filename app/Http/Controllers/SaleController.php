@@ -79,6 +79,8 @@ class SaleController extends Controller
                 'payments.*.amount' => 'required_with:payments|numeric|min:0.01',
                 'discount_amount' => 'nullable|numeric|min:0',
                 'discount_percent' => 'nullable|numeric|min:0|max:100',
+                'tip_amount' => 'nullable|numeric|min:0',
+                'tip_percent' => 'nullable|numeric|min:0|max:100',
                 'customer_id' => 'nullable|integer|exists:customers,id',
                 'station_id' => 'nullable|integer|exists:stations,id',
                 'document_type' => ['nullable', Rule::in(Sale::DOCUMENT_TYPES)],

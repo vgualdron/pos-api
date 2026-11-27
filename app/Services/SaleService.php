@@ -217,9 +217,12 @@ class SaleService
                 $costTotal += $lineCost;
             }
 
+            [$tipAmount, $tipPercent] = $this->resolveTip($data, $payableTotal);
+            $amountDue = round($payableTotal + $tipAmount, 2);
+
             [$paymentMethod, $payments, $amountReceived, $changeAmount] = $this->resolvePayments(
                 $data,
-                $payableTotal
+                $amountDue
             );
 
             foreach ($payments as $payment) {
@@ -246,6 +249,8 @@ class SaleService
                 'tax_base' => $taxBase,
                 'tax_total' => $taxTotal,
                 'total' => $payableTotal,
+                'tip_amount' => $tipAmount,
+                'tip_percent' => $tipPercent,
                 'cost_total' => round($costTotal, 4),
                 'payment_method' => $paymentMethod,
                 'amount_received' => $amountReceived,
@@ -365,6 +370,47 @@ class SaleService
 
         if ($percent === null && $itemsSubtotal > 0 && $amount > 0) {
             $percent = round(($amount / $itemsSubtotal) * 100, 2);
+        }
+
+        return [round($amount, 2), $percent];
+    }
+
+    /**
+     * Tip is optional and defaults to 0. Payments must cover merchandise total + tip.
+     *
+     * @return array{0:float,1:?float}
+     */
+    protected function resolveTip(array $data, float $payableTotal): array
+    {
+        $percent = null;
+        if (array_key_exists('tip_percent', $data) && $data['tip_percent'] !== null && $data['tip_percent'] !== '') {
+            $percent = round((float) $data['tip_percent'], 2);
+            if ($percent < 0 || $percent > 100) {
+                throw new Exception('El porcentaje de propina debe estar entre 0 y 100.');
+            }
+        }
+
+        $amount = 0.0;
+        $hasAmount = array_key_exists('tip_amount', $data)
+            && $data['tip_amount'] !== null
+            && $data['tip_amount'] !== '';
+        if ($hasAmount) {
+            $amount = round((float) $data['tip_amount'], 2);
+        }
+        if ($amount <= 0 && $percent !== null && $percent > 0) {
+            $amount = round($payableTotal * ($percent / 100), 2);
+        }
+
+        if ($amount < 0) {
+            throw new Exception('La propina no puede ser negativa.');
+        }
+
+        if ($amount <= 0) {
+            return [0.0, null];
+        }
+
+        if ($percent === null && $payableTotal > 0) {
+            $percent = round(($amount / $payableTotal) * 100, 2);
         }
 
         return [round($amount, 2), $percent];

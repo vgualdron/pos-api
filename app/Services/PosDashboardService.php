@@ -47,6 +47,7 @@ class PosDashboardService
         );
         $discountTotal = round((float) (clone $completed)->sum('discount_amount'), 2);
         $taxTotal = round((float) (clone $completed)->sum('tax_total'), 2);
+        $tipsTotal = round((float) (clone $completed)->sum('tip_amount'), 2);
 
         $byPayment = [
             'cash' => ['count' => 0, 'total' => 0.0],
@@ -170,12 +171,21 @@ class PosDashboardService
                 'profit' => $salesProfit,
                 'discount_total' => $discountTotal,
                 'tax_total' => $taxTotal,
+                'tips_total' => $tipsTotal,
                 'by_payment' => $byPayment,
             ],
             'sessions' => [
                 'open_count' => $openSessions->count(),
                 'closed_count' => $closedSessions->count(),
-                'closed_sales_total' => round((float) $closedSessions->sum('sales_total'), 2),
+                'closed_sales_total' => round(
+                    (float) $closedSessions->sum(fn ($row) =>
+                        (float) ($row->cash_sales_total ?? 0)
+                        + (float) ($row->card_sales_total ?? 0)
+                        + (float) ($row->transfer_sales_total ?? 0)
+                    ),
+                    2
+                ),
+                'closed_tips_total' => round((float) $closedSessions->sum('tips_total'), 2),
                 'difference_cash_total' => round((float) $closedSessions->sum('difference_cash'), 2),
                 'open' => $openSessions,
             ],
