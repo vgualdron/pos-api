@@ -21,6 +21,7 @@ use App\Http\Controllers\PurchaseController;
 use App\Http\Controllers\RegisterSessionController;
 use App\Http\Controllers\SaleController;
 use App\Http\Controllers\TaxController;
+use App\Http\Controllers\DiningTableController;
 use App\Http\Controllers\ProductCategoryController;
 use App\Http\Controllers\ProductFavoriteController;
 use App\Http\Controllers\PosDashboardController;
@@ -176,6 +177,15 @@ Route::group(['middleware' => ['auth:api'], 'prefix' => '/product-categories'], 
     Route::post('/', [ProductCategoryController::class, 'store']);
     Route::put('{id}', [ProductCategoryController::class, 'update']);
     Route::delete('{id}', [ProductCategoryController::class, 'destroy']);
+});
+
+Route::group(['middleware' => ['auth:api'], 'prefix' => '/dining-tables'], function () {
+    Route::get('place/{place}', [DiningTableController::class, 'byPlace']);
+    Route::get('{id}', [DiningTableController::class, 'show']);
+    Route::post('/', [DiningTableController::class, 'store']);
+    Route::put('{id}', [DiningTableController::class, 'update']);
+    Route::patch('{id}/status', [DiningTableController::class, 'updateStatus']);
+    Route::delete('{id}', [DiningTableController::class, 'destroy']);
 });
 
 Route::group(['middleware' => ['auth:api'], 'prefix' => '/product-favorites'], function () {
