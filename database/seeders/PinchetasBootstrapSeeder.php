@@ -92,7 +92,8 @@ class PinchetasBootstrapSeeder extends Seeder
                         'name' => $categoryName,
                     ],
                     [
-                        'status' => $categoryName === 'Insumos' ? 'inactivo' : 'activo',
+                        'status' => 'activo',
+                        'show_on_register' => $categoryName !== 'Insumos',
                         'sort_order' => $index + 1,
                     ]
                 );

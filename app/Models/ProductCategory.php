@@ -13,10 +13,16 @@ class ProductCategory extends Model
         'name',
         'sort_order',
         'status',
+        'show_on_register',
     ];
 
     protected $casts = [
         'sort_order' => 'integer',
+        'show_on_register' => 'boolean',
+    ];
+
+    protected $attributes = [
+        'show_on_register' => true,
     ];
 
     public function place(): BelongsTo

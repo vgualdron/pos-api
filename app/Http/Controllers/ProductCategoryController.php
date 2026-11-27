@@ -52,6 +52,7 @@ class ProductCategoryController extends Controller
                 'name' => 'required|string|max:120',
                 'sort_order' => 'nullable|integer|min:0|max:9999',
                 'status' => 'nullable|string|max:20',
+                'show_on_register' => 'nullable|boolean',
             ]);
             PlaceScope::assert($request->user(), (int) $data['place_id'], 'product-categories.allPlaces', 'products.allPlaces');
             $record = $this->service->create($data);
@@ -71,6 +72,7 @@ class ProductCategoryController extends Controller
                 'name' => 'sometimes|string|max:120',
                 'sort_order' => 'nullable|integer|min:0|max:9999',
                 'status' => 'nullable|string|max:20',
+                'show_on_register' => 'nullable|boolean',
             ]);
             $record = $this->service->update((int) $id, $data);
 

@@ -43,6 +43,9 @@ class ProductCategoryService
             'name' => $name,
             'sort_order' => (int) ($data['sort_order'] ?? 0),
             'status' => $data['status'] ?? 'activo',
+            'show_on_register' => array_key_exists('show_on_register', $data)
+                ? (bool) $data['show_on_register']
+                : true,
         ]);
     }
 
@@ -63,6 +66,10 @@ class ProductCategoryService
                 throw new Exception('Ya existe una categoría con ese nombre en la sede.');
             }
             $data['name'] = $name;
+        }
+
+        if (array_key_exists('show_on_register', $data)) {
+            $data['show_on_register'] = (bool) $data['show_on_register'];
         }
 
         $category->update($data);
