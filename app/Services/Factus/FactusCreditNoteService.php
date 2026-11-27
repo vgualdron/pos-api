@@ -102,6 +102,50 @@ class FactusCreditNoteService
         }
     }
 
+    public function retryForReturn(Sale $sale, SaleReturn $saleReturn): SaleReturn
+    {
+        if (! $this->shouldEmitForSale($sale)) {
+            throw new Exception('Esta venta no admite nota crédito electrónica.');
+        }
+
+        if ((int) $saleReturn->sale_id !== (int) $sale->id) {
+            throw new Exception('La devolución no pertenece a esta venta.');
+        }
+
+        if (! empty($saleReturn->nc_cude) || ($saleReturn->dian_status ?? null) === 'accepted') {
+            throw new Exception('Esta devolución ya tiene nota crédito aceptada.');
+        }
+
+        $status = $saleReturn->dian_status ?? null;
+        if (! in_array($status, ['failed', 'pending', 'submitted', null, ''], true)) {
+            throw new Exception('Esta devolución no admite reintento de nota crédito.');
+        }
+
+        return $this->emitForReturn($sale, $saleReturn);
+    }
+
+    public function retryForCancel(Sale $sale): Sale
+    {
+        if (! $this->shouldEmitForSale($sale)) {
+            throw new Exception('Esta venta no admite nota crédito electrónica.');
+        }
+
+        if (($sale->status ?? null) !== Sale::STATUS_CANCELLED) {
+            throw new Exception('Solo se puede reintentar la NC de anulación en una venta anulada.');
+        }
+
+        if (! empty($sale->nc_cude) || ($sale->nc_status ?? null) === 'accepted') {
+            throw new Exception('Esta anulación ya tiene nota crédito aceptada.');
+        }
+
+        $status = $sale->nc_status ?? null;
+        if (! in_array($status, ['failed', 'pending', 'submitted', null, ''], true)) {
+            throw new Exception('Esta anulación no admite reintento de nota crédito.');
+        }
+
+        return $this->emitForCancel($sale, $sale->cancel_reason);
+    }
+
     protected function shouldEmitForSale(Sale $sale): bool
     {
         if (($sale->document_type ?? null) !== Sale::DOCUMENT_ELECTRONIC_INVOICE) {

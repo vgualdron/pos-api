@@ -361,6 +361,42 @@ class SaleReturnService
         return $payments;
     }
 
+    public function retryCreditNote($user, int $saleId, int $returnId): Sale
+    {
+        $sale = Sale::with([
+            'lines.lots',
+            'lines.presentation',
+            'lines.product',
+            'payments',
+            'returns.lines',
+            'returns.payments',
+            'station',
+            'user',
+            'customer',
+            'place',
+        ])->findOrFail($saleId);
+
+        PlaceScope::assert($user, (int) $sale->place_id, 'sales.allPlaces');
+
+        $saleReturn = SaleReturn::with(['lines.saleLine.product', 'lines.saleLine.presentation', 'payments'])
+            ->where('sale_id', $sale->id)
+            ->findOrFail($returnId);
+
+        $this->creditNotes->retryForReturn($sale, $saleReturn);
+
+        return $sale->fresh([
+            'lines.lots',
+            'lines.presentation',
+            'lines.product',
+            'payments',
+            'returns.lines',
+            'returns.payments',
+            'station',
+            'user',
+            'customer',
+        ]);
+    }
+
     protected function findOpenSession(Station $station): ?RegisterSession
     {
         return RegisterSession::where('station_id', $station->id)

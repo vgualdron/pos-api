@@ -203,6 +203,7 @@ Route::group(['middleware' => ['auth:api'], 'prefix' => '/sales'], function () {
     Route::post('/', [SaleController::class, 'store']);
     Route::post('{id}/cancel', [SaleController::class, 'cancel']);
     Route::post('{id}/retry-electronic-invoice', [SaleController::class, 'retryElectronicInvoice']);
+    Route::post('{id}/retry-credit-note', [SaleController::class, 'retryCreditNote']);
     Route::post('{id}/returns', [SaleController::class, 'storeReturn']);
 });
 

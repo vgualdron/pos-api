@@ -6,6 +6,7 @@ use App\Models\File;
 use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Models\ProductPresentation;
+use App\Models\ProductRecipeItem;
 use App\Models\StockLot;
 use Exception;
 use Illuminate\Support\Collection;
@@ -18,10 +19,12 @@ class ProductService
     public function all()
     {
         return $this->attachImageUrls(
-            Product::withSum('lots', 'qty_remaining')
-                ->orderBy('place_id')
-                ->orderBy('name')
-                ->get()
+            $this->applyRecipeStock(
+                Product::withSum('lots', 'qty_remaining')
+                    ->orderBy('place_id')
+                    ->orderBy('name')
+                    ->get()
+            )
         );
     }
 
@@ -29,7 +32,9 @@ class ProductService
     {
         $product = Product::withSum('lots', 'qty_remaining')->findOrFail($id);
 
-        return $this->attachImageUrls(collect([$product]))->first();
+        return $this->attachImageUrls(
+            $this->applyRecipeStock(collect([$product]))
+        )->first();
     }
 
     public function findByPlace($placeId, bool $onlyActive = true)
@@ -42,7 +47,7 @@ class ProductService
             $query->where('status', 'activo');
         }
 
-        return $this->attachImageUrls($query->get());
+        return $this->attachImageUrls($this->applyRecipeStock($query->get()));
     }
 
     public function catalog(int $placeId)
@@ -67,9 +72,15 @@ class ProductService
     {
         return DB::transaction(function () use ($data) {
             $presentations = $data['presentations'] ?? [];
+            $recipeItems = $data['recipe_items'] ?? [];
             $initialQtyBase = (float) ($data['initial_qty_base'] ?? 0);
             $initialUnitCost = (float) ($data['initial_unit_cost'] ?? 0);
-            unset($data['presentations'], $data['initial_qty_base'], $data['initial_unit_cost']);
+            unset(
+                $data['presentations'],
+                $data['recipe_items'],
+                $data['initial_qty_base'],
+                $data['initial_unit_cost']
+            );
 
             if (empty($data['sku'])) {
                 $data['sku'] = null;
@@ -79,11 +90,19 @@ class ProductService
                 $data['product_category_id'] = null;
             }
 
+            $data['inventory_mode'] = $this->normalizeInventoryMode($data['inventory_mode'] ?? null);
+
             $this->assertCategoryBelongsToPlace($data);
 
             $product = Product::create($data);
             $this->syncPresentations($product, $presentations);
-            $this->createOpeningLot($product, $initialQtyBase, $initialUnitCost);
+            $this->syncRecipeItems($product, $recipeItems);
+
+            if ($product->usesRecipeInventory()) {
+                // Composed products do not hold their own stock.
+            } else {
+                $this->createOpeningLot($product, $initialQtyBase, $initialUnitCost);
+            }
 
             return $this->find($product->id);
         });
@@ -117,7 +136,8 @@ class ProductService
         return DB::transaction(function () use ($id, $data) {
             $product = Product::findOrFail($id);
             $presentations = $data['presentations'] ?? null;
-            unset($data['presentations']);
+            $recipeItems = array_key_exists('recipe_items', $data) ? $data['recipe_items'] : null;
+            unset($data['presentations'], $data['recipe_items']);
 
             if (array_key_exists('sku', $data) && $data['sku'] === '') {
                 $data['sku'] = null;
@@ -127,15 +147,26 @@ class ProductService
                 $data['product_category_id'] = null;
             }
 
+            if (array_key_exists('inventory_mode', $data)) {
+                $data['inventory_mode'] = $this->normalizeInventoryMode($data['inventory_mode']);
+            }
+
             $this->assertCategoryBelongsToPlace([
                 ...$data,
                 'place_id' => $data['place_id'] ?? $product->place_id,
             ]);
 
             $product->update($data);
+            $product->refresh();
 
             if (is_array($presentations)) {
                 $this->syncPresentations($product, $presentations);
+            }
+
+            if (is_array($recipeItems)) {
+                $this->syncRecipeItems($product, $recipeItems);
+            } elseif ($product->usesRecipeInventory() && $product->recipeItems()->count() === 0) {
+                throw new Exception('Un producto con receta necesita al menos un ingrediente.');
             }
 
             return $this->find($product->id);
@@ -151,6 +182,157 @@ class ProductService
         $product->delete();
     }
 
+    protected function normalizeInventoryMode(?string $mode): string
+    {
+        $mode = $mode ?: Product::INVENTORY_STANDARD;
+        if (!in_array($mode, [Product::INVENTORY_STANDARD, Product::INVENTORY_RECIPE], true)) {
+            throw new Exception('Modo de inventario inválido.');
+        }
+
+        return $mode;
+    }
+
+    protected function syncRecipeItems(Product $product, array $recipeItems): void
+    {
+        if (!$product->usesRecipeInventory()) {
+            $product->recipeItems()->delete();
+
+            return;
+        }
+
+        if (count($recipeItems) === 0) {
+            throw new Exception('Un producto con receta necesita al menos un ingrediente.');
+        }
+
+        $product->loadMissing('presentations');
+        foreach ($product->presentations as $presentation) {
+            if (abs((float) $presentation->factor - 1.0) > 0.0001) {
+                throw new Exception(
+                    'Los productos con receta deben usar factor 1 en todas las presentaciones (la receta se mide por unidad vendida).'
+                );
+            }
+        }
+
+        $keepIds = [];
+        $seenIngredients = [];
+
+        foreach ($recipeItems as $index => $row) {
+            $ingredientId = (int) ($row['ingredient_product_id'] ?? 0);
+            $qtyBase = round((float) ($row['qty_base'] ?? 0), 4);
+
+            if ($ingredientId <= 0) {
+                throw new Exception('Cada ítem de receta necesita un ingrediente.');
+            }
+
+            if ($ingredientId === (int) $product->id) {
+                throw new Exception('Un producto no puede ser ingrediente de sí mismo.');
+            }
+
+            if ($qtyBase <= 0) {
+                throw new Exception('La cantidad de cada ingrediente debe ser mayor que 0.');
+            }
+
+            if (isset($seenIngredients[$ingredientId])) {
+                throw new Exception('No repita el mismo ingrediente en la receta.');
+            }
+            $seenIngredients[$ingredientId] = true;
+
+            $ingredient = Product::find($ingredientId);
+            if (!$ingredient) {
+                throw new Exception('El ingrediente no existe.');
+            }
+
+            if ((int) $ingredient->place_id !== (int) $product->place_id) {
+                throw new Exception("El ingrediente {$ingredient->name} no pertenece a esta sede.");
+            }
+
+            if ($ingredient->usesRecipeInventory()) {
+                throw new Exception(
+                    "{$ingredient->name} también es un producto con receta. Use solo ingredientes con stock propio."
+                );
+            }
+
+            $payload = [
+                'ingredient_product_id' => $ingredientId,
+                'qty_base' => $qtyBase,
+                'sort_order' => (int) ($row['sort_order'] ?? $index),
+            ];
+
+            if (!empty($row['id'])) {
+                $item = ProductRecipeItem::where('product_id', $product->id)
+                    ->where('id', $row['id'])
+                    ->firstOrFail();
+                $item->update($payload);
+            } else {
+                $item = $product->recipeItems()->create($payload);
+            }
+
+            $keepIds[] = $item->id;
+        }
+
+        $product->recipeItems()->whereNotIn('id', $keepIds)->delete();
+    }
+
+    /**
+     * For recipe products, stock_on_hand = how many sale units can be produced.
+     */
+    protected function applyRecipeStock(Collection $products): Collection
+    {
+        $recipeProducts = $products->filter(fn (Product $product) => $product->usesRecipeInventory());
+        if ($recipeProducts->isEmpty()) {
+            return $products;
+        }
+
+        $recipeProducts->loadMissing('recipeItems');
+        $ingredientIds = $recipeProducts
+            ->flatMap(fn (Product $product) => $product->recipeItems->pluck('ingredient_product_id'))
+            ->unique()
+            ->filter()
+            ->values()
+            ->all();
+
+        $ingredientStocks = collect();
+        if (count($ingredientIds) > 0) {
+            $ingredientStocks = Product::query()
+                ->whereIn('id', $ingredientIds)
+                ->withSum('lots', 'qty_remaining')
+                ->get()
+                ->keyBy('id');
+        }
+
+        foreach ($recipeProducts as $product) {
+            $product->setAttribute(
+                'lots_sum_qty_remaining',
+                $this->producibleQty($product, $ingredientStocks)
+            );
+        }
+
+        return $products;
+    }
+
+    protected function producibleQty(Product $product, Collection $ingredientStocks): float
+    {
+        $items = $product->recipeItems;
+        if ($items->isEmpty()) {
+            return 0.0;
+        }
+
+        $min = null;
+        foreach ($items as $item) {
+            $need = (float) $item->qty_base;
+            if ($need <= 0) {
+                return 0.0;
+            }
+
+            $ingredient = $ingredientStocks->get($item->ingredient_product_id);
+            $have = $ingredient ? (float) $ingredient->stock_on_hand : 0.0;
+            $canMake = floor($have / $need);
+            $min = $min === null ? $canMake : min($min, $canMake);
+        }
+
+        return (float) ($min ?? 0);
+    }
+
     protected function syncPresentations(Product $product, array $presentations): void
     {
         if (count($presentations) === 0) {
@@ -164,6 +346,12 @@ class ProductService
             $factor = (float) ($row['factor'] ?? 0);
             if ($factor <= 0) {
                 throw new Exception('El factor de cada presentación debe ser mayor que 0.');
+            }
+
+            if ($product->usesRecipeInventory() && abs($factor - 1.0) > 0.0001) {
+                throw new Exception(
+                    'Los productos con receta deben usar factor 1 en todas las presentaciones.'
+                );
             }
 
             $tax = \App\Support\SalePricing::resolveTax(

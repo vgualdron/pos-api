@@ -8,6 +8,10 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Product extends Model
 {
+    public const INVENTORY_STANDARD = 'standard';
+
+    public const INVENTORY_RECIPE = 'recipe';
+
     protected $fillable = [
         'place_id',
         'product_category_id',
@@ -15,16 +19,22 @@ class Product extends Model
         'sku',
         'barcode',
         'base_unit_name',
+        'inventory_mode',
         'min_stock',
         'status',
     ];
 
-    protected $with = ['presentations', 'category'];
+    protected $with = ['presentations', 'category', 'recipeItems.ingredient'];
 
     protected $appends = ['stock_on_hand'];
 
     protected $casts = [
         'min_stock' => 'float',
+        'inventory_mode' => 'string',
+    ];
+
+    protected $attributes = [
+        'inventory_mode' => self::INVENTORY_STANDARD,
     ];
 
     public function place(): BelongsTo
@@ -42,6 +52,11 @@ class Product extends Model
         return $this->hasMany(ProductPresentation::class)->orderByDesc('is_default')->orderBy('factor');
     }
 
+    public function recipeItems(): HasMany
+    {
+        return $this->hasMany(ProductRecipeItem::class)->orderBy('sort_order')->orderBy('id');
+    }
+
     public function favorites(): HasMany
     {
         return $this->hasMany(ProductFavorite::class);
@@ -50,6 +65,11 @@ class Product extends Model
     public function lots(): HasMany
     {
         return $this->hasMany(StockLot::class);
+    }
+
+    public function usesRecipeInventory(): bool
+    {
+        return ($this->inventory_mode ?? self::INVENTORY_STANDARD) === self::INVENTORY_RECIPE;
     }
 
     public function getStockOnHandAttribute(): float

@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Customer;
+use App\Models\Product;
 use App\Models\ProductPresentation;
 use App\Models\RegisterSession;
 use App\Models\Sale;
@@ -200,13 +201,13 @@ class SaleService
                     'cost_total' => 0,
                 ]);
 
-                $lineCost = $this->consumeFifo(
+                $lineCost = $this->consumeStockForLine(
                     (int) $station->place_id,
-                    (int) $row['product']->id,
-                    $row['qty_base'],
-                    $saleLine->id,
-                    $row['product']->name,
-                    $row['presentation']->name
+                    $row['product'],
+                    $row['presentation'],
+                    (float) $row['qty'],
+                    (float) $row['qty_base'],
+                    $saleLine->id
                 );
 
                 $saleLine->update(['cost_total' => $lineCost]);
@@ -292,6 +293,23 @@ class SaleService
         } catch (Exception $e) {
             return $this->freshSale($saleId);
         }
+    }
+
+    public function retryCreditNote(int $saleId): Sale
+    {
+        $sale = $this->find($saleId);
+
+        return $this->factusCreditNote->retryForCancel($sale)->fresh([
+            'lines.lots',
+            'lines.presentation',
+            'lines.product',
+            'payments',
+            'returns.lines',
+            'returns.payments',
+            'station',
+            'user',
+            'customer',
+        ]);
     }
 
     protected function freshSale(int $saleId): Sale
@@ -512,6 +530,52 @@ class SaleService
             : Sale::PAYMENT_MIXED;
 
         return [$paymentMethod, $payments, $received, $change];
+    }
+
+    protected function consumeStockForLine(
+        int $placeId,
+        Product $product,
+        ProductPresentation $presentation,
+        float $qty,
+        float $qtyBase,
+        int $saleLineId
+    ): float {
+        if ($product->usesRecipeInventory()) {
+            $product->loadMissing('recipeItems.ingredient');
+            $items = $product->recipeItems;
+            if ($items->isEmpty()) {
+                throw new Exception("{$product->name} está en modo receta pero no tiene ingredientes.");
+            }
+
+            $cost = 0.0;
+            foreach ($items as $item) {
+                $ingredient = $item->ingredient;
+                if (!$ingredient) {
+                    throw new Exception("Ingrediente faltante en la receta de {$product->name}.");
+                }
+
+                $need = round($qty * (float) $item->qty_base, 4);
+                $cost += $this->consumeFifo(
+                    $placeId,
+                    (int) $ingredient->id,
+                    $need,
+                    $saleLineId,
+                    $ingredient->name,
+                    $product->name
+                );
+            }
+
+            return round($cost, 4);
+        }
+
+        return $this->consumeFifo(
+            $placeId,
+            (int) $product->id,
+            $qtyBase,
+            $saleLineId,
+            $product->name,
+            $presentation->name
+        );
     }
 
     protected function consumeFifo(

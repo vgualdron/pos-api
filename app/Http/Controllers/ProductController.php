@@ -57,6 +57,7 @@ class ProductController extends Controller
                 'sku' => 'nullable|string|max:80',
                 'barcode' => 'nullable|string|max:80',
                 'base_unit_name' => 'required|string|max:40',
+                'inventory_mode' => 'nullable|string|in:standard,recipe',
                 'min_stock' => 'nullable|numeric|min:0',
                 'status' => 'nullable|string|max:20',
                 // Opening inventory for businesses that already have stock (no purchase yet).
@@ -71,6 +72,11 @@ class ProductController extends Controller
                 'presentations.*.barcode' => 'nullable|string|max:80',
                 'presentations.*.is_default' => 'nullable|boolean',
                 'presentations.*.status' => 'nullable|string|max:20',
+                'recipe_items' => 'nullable|array',
+                'recipe_items.*.id' => 'nullable|integer',
+                'recipe_items.*.ingredient_product_id' => 'required_with:recipe_items|integer|exists:products,id',
+                'recipe_items.*.qty_base' => 'required_with:recipe_items|numeric|min:0.0001',
+                'recipe_items.*.sort_order' => 'nullable|integer|min:0',
             ]);
             PlaceScope::assert($request->user(), (int) $data['place_id'], 'products.allPlaces');
             $record = $this->service->create($data);
@@ -93,6 +99,7 @@ class ProductController extends Controller
                 'sku' => 'nullable|string|max:80',
                 'barcode' => 'nullable|string|max:80',
                 'base_unit_name' => 'sometimes|string|max:40',
+                'inventory_mode' => 'nullable|string|in:standard,recipe',
                 'min_stock' => 'nullable|numeric|min:0',
                 'status' => 'nullable|string|max:20',
                 'presentations' => 'sometimes|array|min:1',
@@ -104,6 +111,11 @@ class ProductController extends Controller
                 'presentations.*.barcode' => 'nullable|string|max:80',
                 'presentations.*.is_default' => 'nullable|boolean',
                 'presentations.*.status' => 'nullable|string|max:20',
+                'recipe_items' => 'nullable|array',
+                'recipe_items.*.id' => 'nullable|integer',
+                'recipe_items.*.ingredient_product_id' => 'required_with:recipe_items|integer|exists:products,id',
+                'recipe_items.*.qty_base' => 'required_with:recipe_items|numeric|min:0.0001',
+                'recipe_items.*.sort_order' => 'nullable|integer|min:0',
             ]);
             $record = $this->service->update($id, $data);
 

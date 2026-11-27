@@ -57,7 +57,19 @@ class CompanyController extends Controller
                 throw new Exception('No tiene permiso para crear empresas de otros tenants.');
             }
 
-            $data = $request->only($this->fields);
+            $data = $request->validate([
+                'name' => 'required|string|max:255',
+                'document_type' => 'nullable|string|max:40',
+                'document_number' => 'nullable|string|max:80',
+                'address' => 'nullable|string|max:255',
+                'phone' => 'nullable|string|max:40',
+                'email' => 'nullable|email|max:255',
+                'status' => 'nullable|string|max:20',
+                'configuration' => 'nullable|array',
+                'configuration.template_color' => 'nullable|string|max:32',
+                'configuration.domain' => 'nullable|string|max:255',
+                'configuration.business_mode' => 'nullable|string|in:retail,restaurant',
+            ]);
             $r = $this->service->create($data);
             $m = $r ? 'Registro creado con éxito' : 'No se realizó la creación del registro';
 
@@ -71,7 +83,19 @@ class CompanyController extends Controller
     {
         try {
             CompanyScope::assert($request->user(), (int) $id);
-            $data = $request->only($this->fields);
+            $data = $request->validate([
+                'name' => 'sometimes|string|max:255',
+                'document_type' => 'nullable|string|max:40',
+                'document_number' => 'nullable|string|max:80',
+                'address' => 'nullable|string|max:255',
+                'phone' => 'nullable|string|max:40',
+                'email' => 'nullable|email|max:255',
+                'status' => 'nullable|string|max:20',
+                'configuration' => 'nullable|array',
+                'configuration.template_color' => 'nullable|string|max:32',
+                'configuration.domain' => 'nullable|string|max:255',
+                'configuration.business_mode' => 'nullable|string|in:retail,restaurant',
+            ]);
             $r = $this->service->update($id, $data);
             $m = $r ? 'Registro modificado con éxito' : 'No se realizó la modificación del registro';
 

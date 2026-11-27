@@ -2,9 +2,9 @@
 namespace App\Services;
 
 use App\Models\Station;
+use App\Models\User;
 use App\Repositories\UserRepository;
 use Illuminate\Support\Facades\Artisan;
-use App\Models\User;
 use Illuminate\Support\Facades\Hash;
 
 class AuthService
@@ -71,6 +71,7 @@ class AuthService
 
 
         $stationContext = $this->buildStationContext($user->station);
+        $businessMode = CompanyService::resolveBusinessMode($user->company);
 
         return [
             'user' => $user,
@@ -80,6 +81,7 @@ class AuthService
             'grouped' => $grouped,
             'station' => $stationContext['station'],
             'ui_mode' => $stationContext['ui_mode'],
+            'business_mode' => $businessMode,
         ];
     }
 
@@ -87,7 +89,9 @@ class AuthService
     {
         $user->load(['company', 'place', 'station.place']);
 
-        return $this->buildStationContext($user->station);
+        return array_merge($this->buildStationContext($user->station), [
+            'business_mode' => CompanyService::resolveBusinessMode($user->company),
+        ]);
     }
 
     public function logout(User $user): void

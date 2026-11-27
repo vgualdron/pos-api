@@ -179,4 +179,54 @@ class SaleController extends Controller
             return response()->json(['error' => 'Error al devolver', 'message' => $e->getMessage()], 400);
         }
     }
+
+    public function retryCreditNote(Request $request, $id): JsonResponse
+    {
+        try {
+            $sale = $this->service->find((int) $id);
+            PlaceScope::assert($request->user(), (int) $sale->place_id, 'sales.allPlaces');
+
+            $data = $request->validate([
+                'sale_return_id' => 'nullable|integer|exists:sale_returns,id',
+            ]);
+
+            if (! empty($data['sale_return_id'])) {
+                $sale = $this->returnService->retryCreditNote(
+                    $request->user(),
+                    (int) $id,
+                    (int) $data['sale_return_id']
+                );
+                $latestReturn = collect($sale->returns ?? [])->firstWhere('id', (int) $data['sale_return_id']);
+                $ncStatus = is_array($latestReturn)
+                    ? ($latestReturn['dian_status'] ?? null)
+                    : ($latestReturn->dian_status ?? null);
+                $ncError = is_array($latestReturn)
+                    ? ($latestReturn['nc_error'] ?? null)
+                    : ($latestReturn->nc_error ?? null);
+                $ncCude = is_array($latestReturn)
+                    ? ($latestReturn['nc_cude'] ?? null)
+                    : ($latestReturn->nc_cude ?? null);
+                $accepted = $ncStatus === 'accepted' || ! empty($ncCude);
+                $message = $accepted
+                    ? 'Nota crédito emitida'
+                    : ('Falló el reintento de nota crédito' . (! empty($ncError) ? ': ' . $ncError : ''));
+
+                return response()->json(['message' => $message, 'data' => $sale], $accepted ? 200 : 400);
+            }
+
+            $sale = $this->service->retryCreditNote((int) $id);
+            $accepted = ($sale->nc_status ?? null) === 'accepted' || ! empty($sale->nc_cude);
+            $message = $accepted
+                ? 'Nota crédito emitida'
+                : ('Falló el reintento de nota crédito'
+                    . (! empty($sale->nc_error) ? ': ' . $sale->nc_error : ''));
+
+            return response()->json(['message' => $message, 'data' => $sale], $accepted ? 200 : 400);
+        } catch (Exception $e) {
+            return response()->json([
+                'error' => 'Error al reintentar la nota crédito',
+                'message' => $e->getMessage(),
+            ], 400);
+        }
+    }
 }
