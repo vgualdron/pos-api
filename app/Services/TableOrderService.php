@@ -4,9 +4,11 @@ namespace App\Services;
 
 use App\Models\DiningTable;
 use App\Models\ProductPresentation;
+use App\Models\Sale;
 use App\Models\Station;
 use App\Models\TableOrder;
 use App\Models\TableOrderLine;
+use App\Support\PosStation;
 use App\Support\SalePricing;
 use Carbon\Carbon;
 use Exception;
@@ -257,6 +259,98 @@ class TableOrderService
 
             return $order->fresh(['lines.kitchenStation', 'diningTable.diningZone']);
         });
+    }
+
+    /**
+     * Convert an open table order into a completed sale, then free the table.
+     *
+     * @return array{sale: Sale, order: TableOrder, table: DiningTable}
+     */
+    public function checkout(int $diningTableId, $user, array $data): array
+    {
+        $table = DiningTable::with('diningZone')->findOrFail($diningTableId);
+        $order = $this->getOpenOrderForTable($diningTableId);
+
+        if (! $order) {
+            throw new Exception('No hay comanda abierta en esta mesa.');
+        }
+        if ($order->sale_id) {
+            throw new Exception('Esta comanda ya fue facturada.');
+        }
+        if ($order->lines->isEmpty()) {
+            throw new Exception('La comanda está vacía. Agregue productos antes de facturar.');
+        }
+
+        $station = PosStation::resolve(
+            $user,
+            isset($data['station_id']) ? (int) $data['station_id'] : null
+        );
+
+        if ((int) $station->place_id !== (int) $table->place_id) {
+            throw new Exception('La caja seleccionada no pertenece a la sede de la mesa.');
+        }
+
+        $salePayload = [
+            'station_id' => $station->id,
+            'payments' => $data['payments'] ?? [],
+            'amount_received' => $data['amount_received'] ?? null,
+            'discount_amount' => array_key_exists('discount_amount', $data)
+                ? $data['discount_amount']
+                : ($order->discount_amount ?? 0),
+            'discount_percent' => array_key_exists('discount_percent', $data)
+                ? $data['discount_percent']
+                : ($order->discount_percent ?? null),
+            'customer_id' => $data['customer_id'] ?? null,
+            'document_type' => $data['document_type'] ?? Sale::DOCUMENT_POS_TICKET,
+            'lines' => $order->lines->map(fn (TableOrderLine $line) => [
+                'product_presentation_id' => (int) $line->product_presentation_id,
+                'qty' => (float) $line->qty,
+                'unit_price' => (float) $line->unit_price,
+            ])->all(),
+        ];
+
+        $sale = app(SaleService::class)->create($user, $salePayload);
+
+        $closed = DB::transaction(function () use ($order, $sale, $table) {
+            $freshOrder = TableOrder::query()
+                ->where('id', $order->id)
+                ->where('status', TableOrder::STATUS_OPEN)
+                ->lockForUpdate()
+                ->first();
+
+            if (! $freshOrder) {
+                throw new Exception('La comanda ya no está abierta. Recargue e intente de nuevo.');
+            }
+
+            $freshOrder->update([
+                'sale_id' => $sale->id,
+                'status' => TableOrder::STATUS_CLOSED,
+                'closed_at' => Carbon::now(),
+                'subtotal' => $sale->subtotal,
+                'discount_amount' => $sale->discount_amount,
+                'discount_percent' => $sale->discount_percent,
+                'tax_base' => $sale->tax_base,
+                'tax_total' => $sale->tax_total,
+                'total' => $sale->total,
+            ]);
+
+            $table->update([
+                'operational_status' => DiningTable::OP_FREE,
+                'occupied_at' => null,
+                'order_taken_at' => null,
+            ]);
+
+            return [
+                'order' => $freshOrder->fresh(['lines.kitchenStation', 'diningTable.diningZone']),
+                'table' => $table->fresh('diningZone'),
+            ];
+        });
+
+        return [
+            'sale' => $sale,
+            'order' => $closed['order'],
+            'table' => $closed['table'],
+        ];
     }
 
     public function closeOpenOrdersForTable(int $diningTableId, string $status = TableOrder::STATUS_VOID): void

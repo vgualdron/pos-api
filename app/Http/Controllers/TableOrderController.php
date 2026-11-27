@@ -3,12 +3,14 @@
 namespace App\Http\Controllers;
 
 use App\Models\DiningTable;
+use App\Models\Sale;
 use App\Models\TableOrderLine;
 use App\Services\TableOrderService;
 use App\Support\PlaceScope;
 use Exception;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class TableOrderController extends Controller
 {
@@ -117,6 +119,53 @@ class TableOrderController extends Controller
             ]);
         } catch (Exception $e) {
             return response()->json(['error' => 'Error al enviar pedido', 'message' => $e->getMessage()], 400);
+        }
+    }
+
+    public function checkout(Request $request, $diningTableId): JsonResponse
+    {
+        try {
+            $table = DiningTable::findOrFail((int) $diningTableId);
+            PlaceScope::assert(
+                $request->user(),
+                (int) $table->place_id,
+                'dining-tables.allPlaces',
+                'sales.allPlaces'
+            );
+
+            $data = $request->validate([
+                'payment_method' => ['nullable', Rule::in(Sale::PAYMENT_METHODS)],
+                'amount_received' => 'nullable|numeric|min:0',
+                'payments' => 'nullable|array|min:1',
+                'payments.*.payment_method' => ['required_with:payments', Rule::in(Sale::PAYMENT_METHODS)],
+                'payments.*.amount' => 'required_with:payments|numeric|min:0.01',
+                'discount_amount' => 'nullable|numeric|min:0',
+                'discount_percent' => 'nullable|numeric|min:0|max:100',
+                'customer_id' => 'nullable|integer|exists:customers,id',
+                'station_id' => 'nullable|integer|exists:stations,id',
+                'document_type' => ['nullable', Rule::in(Sale::DOCUMENT_TYPES)],
+            ]);
+
+            $result = $this->service->checkout((int) $diningTableId, $request->user(), $data);
+            $sale = $result['sale'];
+
+            $message = 'Mesa facturada y liberada';
+            if (($sale->document_type ?? null) === Sale::DOCUMENT_ELECTRONIC_INVOICE) {
+                if (($sale->fe_status ?? null) === 'accepted') {
+                    $message = 'Mesa facturada con FE y liberada';
+                } elseif (($sale->fe_status ?? null) === 'failed') {
+                    $message = 'Mesa facturada y liberada, pero falló la factura electrónica';
+                }
+            }
+
+            return response()->json([
+                'message' => $message,
+                'data' => $result['order'],
+                'sale' => $sale,
+                'table' => $result['table'],
+            ], 201);
+        } catch (Exception $e) {
+            return response()->json(['error' => 'Error al facturar la mesa', 'message' => $e->getMessage()], 400);
         }
     }
 }

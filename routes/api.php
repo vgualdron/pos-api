@@ -204,6 +204,7 @@ Route::group(['middleware' => ['auth:api'], 'prefix' => '/table-orders'], functi
     Route::get('table/{diningTableId}', [TableOrderController::class, 'showByTable']);
     Route::post('table/{diningTableId}/lines', [TableOrderController::class, 'addLine']);
     Route::post('table/{diningTableId}/send', [TableOrderController::class, 'send']);
+    Route::post('table/{diningTableId}/checkout', [TableOrderController::class, 'checkout']);
     Route::put('lines/{lineId}', [TableOrderController::class, 'updateLine']);
     Route::delete('lines/{lineId}', [TableOrderController::class, 'removeLine']);
 });
