@@ -30,6 +30,8 @@ class DiningTable extends Model
         'seats',
         'dining_zone_id',
         'operational_status',
+        'occupied_at',
+        'order_taken_at',
         'status',
         'sort_order',
     ];
@@ -39,6 +41,8 @@ class DiningTable extends Model
     protected $casts = [
         'seats' => 'integer',
         'sort_order' => 'integer',
+        'occupied_at' => 'datetime',
+        'order_taken_at' => 'datetime',
     ];
 
     protected $attributes = [

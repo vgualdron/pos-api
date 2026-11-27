@@ -194,6 +194,7 @@ Route::group(['middleware' => ['auth:api'], 'prefix' => '/dining-tables'], funct
     Route::post('/', [DiningTableController::class, 'store']);
     Route::put('{id}', [DiningTableController::class, 'update']);
     Route::patch('{id}/status', [DiningTableController::class, 'updateStatus']);
+    Route::patch('{id}/order-taken', [DiningTableController::class, 'markOrderTaken']);
     Route::delete('{id}', [DiningTableController::class, 'destroy']);
 });
 

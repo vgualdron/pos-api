@@ -103,6 +103,19 @@ class DiningTableController extends Controller
         }
     }
 
+    public function markOrderTaken(Request $request, $id): JsonResponse
+    {
+        try {
+            $existing = $this->service->find((int) $id);
+            PlaceScope::assert($request->user(), (int) $existing->place_id, 'dining-tables.allPlaces');
+            $record = $this->service->markOrderTaken((int) $id);
+
+            return response()->json(['message' => 'Pedido registrado en la mesa', 'data' => $record]);
+        } catch (Exception $e) {
+            return response()->json(['error' => 'Error al registrar pedido', 'message' => $e->getMessage()], 400);
+        }
+    }
+
     public function destroy(Request $request, $id): JsonResponse
     {
         try {

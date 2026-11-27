@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\DiningTable;
 use App\Models\DiningZone;
+use Carbon\Carbon;
 use Exception;
 
 class DiningTableService
@@ -51,6 +52,9 @@ class DiningTableService
 
         $zoneId = $this->resolveZoneId($placeId, $data['dining_zone_id'] ?? null);
 
+        $operationalStatus = $this->normalizeOperationalStatus($data['operational_status'] ?? null);
+        $now = Carbon::now();
+
         $table = DiningTable::create([
             'place_id' => $placeId,
             'code' => $code,
@@ -59,7 +63,9 @@ class DiningTableService
                 ? (int) $data['seats']
                 : null,
             'dining_zone_id' => $zoneId,
-            'operational_status' => $this->normalizeOperationalStatus($data['operational_status'] ?? null),
+            'operational_status' => $operationalStatus,
+            'occupied_at' => $operationalStatus === DiningTable::OP_FREE ? null : $now,
+            'order_taken_at' => null,
             'status' => ($data['status'] ?? DiningTable::STATUS_ACTIVE) === DiningTable::STATUS_INACTIVE
                 ? DiningTable::STATUS_INACTIVE
                 : DiningTable::STATUS_ACTIVE,
@@ -107,7 +113,11 @@ class DiningTableService
         }
 
         if (array_key_exists('operational_status', $data)) {
-            $data['operational_status'] = $this->normalizeOperationalStatus($data['operational_status']);
+            $status = $this->normalizeOperationalStatus($data['operational_status']);
+            $data['operational_status'] = $status;
+            $data = array_merge($data, $this->timestampsForStatus($table, $status));
+        } else {
+            unset($data['occupied_at'], $data['order_taken_at']);
         }
 
         if (array_key_exists('status', $data)) {
@@ -129,11 +139,43 @@ class DiningTableService
     public function updateOperationalStatus(int $id, string $status): DiningTable
     {
         $table = $this->find($id);
+        $status = $this->normalizeOperationalStatus($status);
+        $table->update(array_merge(
+            ['operational_status' => $status],
+            $this->timestampsForStatus($table, $status)
+        ));
+
+        return $table->fresh('diningZone');
+    }
+
+    public function markOrderTaken(int $id): DiningTable
+    {
+        $table = $this->find($id);
+        if (($table->operational_status ?? DiningTable::OP_FREE) === DiningTable::OP_FREE) {
+            throw new Exception('La mesa está libre. Márquela ocupada antes de tomar el pedido.');
+        }
+
+        $now = Carbon::now();
         $table->update([
-            'operational_status' => $this->normalizeOperationalStatus($status),
+            'order_taken_at' => $now,
+            'occupied_at' => $table->occupied_at ?: $now,
         ]);
 
         return $table->fresh('diningZone');
+    }
+
+    protected function timestampsForStatus(DiningTable $table, string $status): array
+    {
+        if ($status === DiningTable::OP_FREE) {
+            return [
+                'occupied_at' => null,
+                'order_taken_at' => null,
+            ];
+        }
+
+        return [
+            'occupied_at' => $table->occupied_at ?: Carbon::now(),
+        ];
     }
 
     public function delete(int $id): void
