@@ -22,6 +22,7 @@ use App\Http\Controllers\RegisterSessionController;
 use App\Http\Controllers\SaleController;
 use App\Http\Controllers\TaxController;
 use App\Http\Controllers\DiningTableController;
+use App\Http\Controllers\DiningZoneController;
 use App\Http\Controllers\ProductCategoryController;
 use App\Http\Controllers\ProductFavoriteController;
 use App\Http\Controllers\PosDashboardController;
@@ -177,6 +178,14 @@ Route::group(['middleware' => ['auth:api'], 'prefix' => '/product-categories'], 
     Route::post('/', [ProductCategoryController::class, 'store']);
     Route::put('{id}', [ProductCategoryController::class, 'update']);
     Route::delete('{id}', [ProductCategoryController::class, 'destroy']);
+});
+
+Route::group(['middleware' => ['auth:api'], 'prefix' => '/dining-zones'], function () {
+    Route::get('place/{place}', [DiningZoneController::class, 'byPlace']);
+    Route::get('{id}', [DiningZoneController::class, 'show']);
+    Route::post('/', [DiningZoneController::class, 'store']);
+    Route::put('{id}', [DiningZoneController::class, 'update']);
+    Route::delete('{id}', [DiningZoneController::class, 'destroy']);
 });
 
 Route::group(['middleware' => ['auth:api'], 'prefix' => '/dining-tables'], function () {

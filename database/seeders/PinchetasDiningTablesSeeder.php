@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use App\Models\Company;
 use App\Models\DiningTable;
+use App\Models\DiningZone;
 use App\Models\Place;
 use Illuminate\Database\Seeder;
 
@@ -39,6 +40,21 @@ class PinchetasDiningTablesSeeder extends Seeder
         ];
 
         foreach ($places as $place) {
+            $zoneIds = [];
+            foreach (['Salón' => 1, 'Terraza' => 2] as $zoneName => $sort) {
+                $zone = DiningZone::updateOrCreate(
+                    [
+                        'place_id' => $place->id,
+                        'name' => $zoneName,
+                    ],
+                    [
+                        'sort_order' => $sort,
+                        'status' => DiningZone::STATUS_ACTIVE,
+                    ]
+                );
+                $zoneIds[$zoneName] = $zone->id;
+            }
+
             foreach ($layout as $row) {
                 DiningTable::updateOrCreate(
                     [
@@ -48,14 +64,14 @@ class PinchetasDiningTablesSeeder extends Seeder
                     [
                         'name' => $row['name'],
                         'seats' => $row['seats'],
-                        'zone' => $row['zone'],
+                        'dining_zone_id' => $zoneIds[$row['zone']] ?? null,
                         'operational_status' => DiningTable::OP_FREE,
                         'status' => DiningTable::STATUS_ACTIVE,
                         'sort_order' => $row['sort_order'],
                     ]
                 );
             }
-            $this->command?->info("Mesas Pinchetas cargadas en {$place->name}.");
+            $this->command?->info("Zonas y mesas Pinchetas cargadas en {$place->name}.");
         }
     }
 }

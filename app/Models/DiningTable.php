@@ -28,11 +28,13 @@ class DiningTable extends Model
         'code',
         'name',
         'seats',
-        'zone',
+        'dining_zone_id',
         'operational_status',
         'status',
         'sort_order',
     ];
+
+    protected $with = ['diningZone'];
 
     protected $casts = [
         'seats' => 'integer',
@@ -48,6 +50,11 @@ class DiningTable extends Model
     public function place(): BelongsTo
     {
         return $this->belongsTo(Place::class);
+    }
+
+    public function diningZone(): BelongsTo
+    {
+        return $this->belongsTo(DiningZone::class);
     }
 
     public function isActive(): bool

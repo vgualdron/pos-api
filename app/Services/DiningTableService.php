@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\DiningTable;
+use App\Models\DiningZone;
 use Exception;
 
 class DiningTableService
@@ -11,12 +12,16 @@ class DiningTableService
     {
         $query = DiningTable::query()
             ->where('place_id', $placeId)
-            ->orderBy('zone')
-            ->orderBy('sort_order')
-            ->orderBy('code');
+            ->with('diningZone')
+            ->leftJoin('dining_zones', 'dining_zones.id', '=', 'dining_tables.dining_zone_id')
+            ->orderBy('dining_zones.sort_order')
+            ->orderBy('dining_zones.name')
+            ->orderBy('dining_tables.sort_order')
+            ->orderBy('dining_tables.code')
+            ->select('dining_tables.*');
 
         if ($onlyActive) {
-            $query->where('status', DiningTable::STATUS_ACTIVE);
+            $query->where('dining_tables.status', DiningTable::STATUS_ACTIVE);
         }
 
         return $query->get();
@@ -24,7 +29,7 @@ class DiningTableService
 
     public function find(int $id): DiningTable
     {
-        return DiningTable::findOrFail($id);
+        return DiningTable::with('diningZone')->findOrFail($id);
     }
 
     public function create(array $data): DiningTable
@@ -44,20 +49,24 @@ class DiningTableService
             throw new Exception('Ya existe una mesa con ese código en la sede.');
         }
 
-        return DiningTable::create([
+        $zoneId = $this->resolveZoneId($placeId, $data['dining_zone_id'] ?? null);
+
+        $table = DiningTable::create([
             'place_id' => $placeId,
             'code' => $code,
             'name' => $name,
             'seats' => isset($data['seats']) && $data['seats'] !== '' && $data['seats'] !== null
                 ? (int) $data['seats']
                 : null,
-            'zone' => $this->nullableString($data['zone'] ?? null),
+            'dining_zone_id' => $zoneId,
             'operational_status' => $this->normalizeOperationalStatus($data['operational_status'] ?? null),
             'status' => ($data['status'] ?? DiningTable::STATUS_ACTIVE) === DiningTable::STATUS_INACTIVE
                 ? DiningTable::STATUS_INACTIVE
                 : DiningTable::STATUS_ACTIVE,
             'sort_order' => (int) ($data['sort_order'] ?? 0),
         ]);
+
+        return $table->fresh('diningZone');
     }
 
     public function update(int $id, array $data): DiningTable
@@ -87,8 +96,8 @@ class DiningTableService
             $data['name'] = $name;
         }
 
-        if (array_key_exists('zone', $data)) {
-            $data['zone'] = $this->nullableString($data['zone']);
+        if (array_key_exists('dining_zone_id', $data)) {
+            $data['dining_zone_id'] = $this->resolveZoneId((int) $table->place_id, $data['dining_zone_id']);
         }
 
         if (array_key_exists('seats', $data)) {
@@ -111,9 +120,10 @@ class DiningTableService
             $data['sort_order'] = (int) $data['sort_order'];
         }
 
+        unset($data['zone']);
         $table->update($data);
 
-        return $table->fresh();
+        return $table->fresh('diningZone');
     }
 
     public function updateOperationalStatus(int $id, string $status): DiningTable
@@ -123,12 +133,26 @@ class DiningTableService
             'operational_status' => $this->normalizeOperationalStatus($status),
         ]);
 
-        return $table->fresh();
+        return $table->fresh('diningZone');
     }
 
     public function delete(int $id): void
     {
         $this->find($id)->delete();
+    }
+
+    protected function resolveZoneId(int $placeId, mixed $zoneId): ?int
+    {
+        if ($zoneId === null || $zoneId === '') {
+            return null;
+        }
+
+        $zone = DiningZone::find((int) $zoneId);
+        if (!$zone || (int) $zone->place_id !== $placeId) {
+            throw new Exception('La zona no pertenece a esta sede.');
+        }
+
+        return (int) $zone->id;
     }
 
     protected function normalizeOperationalStatus(?string $status): string
@@ -139,12 +163,5 @@ class DiningTableService
         }
 
         return $status;
-    }
-
-    protected function nullableString(mixed $value): ?string
-    {
-        $text = trim((string) ($value ?? ''));
-
-        return $text === '' ? null : $text;
     }
 }

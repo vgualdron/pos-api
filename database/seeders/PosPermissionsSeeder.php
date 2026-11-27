@@ -41,6 +41,11 @@ class PosPermissionsSeeder extends Seeder
             ['name' => 'dining-tables.edit', 'label' => 'Editar mesas', 'subgroup' => 'Mesas', 'route' => '/dining-table', 'icon' => 'table_restaurant', 'order' => 1],
             ['name' => 'dining-tables.delete', 'label' => 'Eliminar mesas', 'subgroup' => 'Mesas', 'route' => '/dining-table', 'icon' => 'table_restaurant', 'order' => 1],
             ['name' => 'dining-tables.allPlaces', 'label' => 'Mesas de todas las sedes', 'subgroup' => 'Mesas', 'route' => '/dining-table', 'icon' => 'table_restaurant', 'order' => 1],
+            ['name' => 'dining-zones.list', 'label' => 'Listar zonas', 'subgroup' => 'Zonas', 'route' => '/dining-zone', 'icon' => 'map', 'order' => 1],
+            ['name' => 'dining-zones.create', 'label' => 'Crear zonas', 'subgroup' => 'Zonas', 'route' => '/dining-zone', 'icon' => 'map', 'order' => 1],
+            ['name' => 'dining-zones.edit', 'label' => 'Editar zonas', 'subgroup' => 'Zonas', 'route' => '/dining-zone', 'icon' => 'map', 'order' => 1],
+            ['name' => 'dining-zones.delete', 'label' => 'Eliminar zonas', 'subgroup' => 'Zonas', 'route' => '/dining-zone', 'icon' => 'map', 'order' => 1],
+            ['name' => 'dining-zones.allPlaces', 'label' => 'Zonas de todas las sedes', 'subgroup' => 'Zonas', 'route' => '/dining-zone', 'icon' => 'map', 'order' => 1],
             ['name' => 'purchases.list', 'label' => 'Listar compras', 'subgroup' => 'Compras', 'route' => '/purchase', 'icon' => 'local_shipping', 'order' => 2],
             ['name' => 'purchases.create', 'label' => 'Registrar compras', 'subgroup' => 'Compras', 'route' => '/purchase', 'icon' => 'local_shipping', 'order' => 2],
             ['name' => 'purchases.allPlaces', 'label' => 'Compras de todas las sedes', 'subgroup' => 'Compras', 'route' => '/purchase', 'icon' => 'local_shipping', 'order' => 2],
@@ -92,6 +97,7 @@ class PosPermissionsSeeder extends Seeder
             'customers.create',
             'dining-tables.list',
             'dining-tables.edit',
+            'dining-zones.list',
         ]);
     }
 }
