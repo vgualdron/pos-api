@@ -19,7 +19,7 @@ return [
 
     'allowed_methods' => ['*'],
 
-    'allowed_origins' => ['http://localhost:9000', 'http://localhost:8080', 'https://pos.jflingenieria.com'],
+    'allowed_origins' => ['http://localhost:9000', 'http://localhost:9001', 'https://pos.jflingenieria.com'],
 
     'allowed_origins_patterns' => [],
 
