@@ -145,6 +145,10 @@ class DiningTableService
             $this->timestampsForStatus($table, $status)
         ));
 
+        if ($status === DiningTable::OP_FREE) {
+            app(TableOrderService::class)->closeOpenOrdersForTable($table->id);
+        }
+
         return $table->fresh('diningZone');
     }
 

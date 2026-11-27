@@ -23,6 +23,7 @@ use App\Http\Controllers\SaleController;
 use App\Http\Controllers\TaxController;
 use App\Http\Controllers\DiningTableController;
 use App\Http\Controllers\DiningZoneController;
+use App\Http\Controllers\TableOrderController;
 use App\Http\Controllers\ProductCategoryController;
 use App\Http\Controllers\ProductFavoriteController;
 use App\Http\Controllers\PosDashboardController;
@@ -196,6 +197,14 @@ Route::group(['middleware' => ['auth:api'], 'prefix' => '/dining-tables'], funct
     Route::patch('{id}/status', [DiningTableController::class, 'updateStatus']);
     Route::patch('{id}/order-taken', [DiningTableController::class, 'markOrderTaken']);
     Route::delete('{id}', [DiningTableController::class, 'destroy']);
+});
+
+Route::group(['middleware' => ['auth:api'], 'prefix' => '/table-orders'], function () {
+    Route::get('catalog', [TableOrderController::class, 'catalog']);
+    Route::get('table/{diningTableId}', [TableOrderController::class, 'showByTable']);
+    Route::post('table/{diningTableId}/lines', [TableOrderController::class, 'addLine']);
+    Route::put('lines/{lineId}', [TableOrderController::class, 'updateLine']);
+    Route::delete('lines/{lineId}', [TableOrderController::class, 'removeLine']);
 });
 
 Route::group(['middleware' => ['auth:api'], 'prefix' => '/product-favorites'], function () {
