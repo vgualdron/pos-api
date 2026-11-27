@@ -11,6 +11,7 @@ use App\Models\SaleReturnLineLot;
 use App\Models\SaleReturnPayment;
 use App\Models\Station;
 use App\Models\StockLot;
+use App\Services\Factus\FactusCreditNoteService;
 use App\Support\PlaceScope;
 use App\Support\PosStation;
 use App\Support\SalePricing;
@@ -20,11 +21,15 @@ use Illuminate\Support\Facades\DB;
 
 class SaleReturnService
 {
+    public function __construct(protected FactusCreditNoteService $creditNotes)
+    {
+    }
+
     public function create($user, int $saleId, array $data): Sale
     {
         $station = PosStation::resolve($user, isset($data['station_id']) ? (int) $data['station_id'] : null);
 
-        return DB::transaction(function () use ($user, $saleId, $data, $station) {
+        $sale = DB::transaction(function () use ($user, $saleId, $data, $station) {
             $sale = Sale::with(['lines.lots', 'payments', 'returns.payments'])
                 ->lockForUpdate()
                 ->findOrFail($saleId);
@@ -164,18 +169,42 @@ class SaleReturnService
             $sale->status = Sale::STATUS_PARTIALLY_RETURNED;
             $sale->save();
 
-            return $sale->fresh([
-                'lines.lots',
-                'lines.presentation',
-                'lines.product',
-                'payments',
-                'returns.lines',
-                'returns.payments',
-                'station',
-                'user',
-                'customer',
-            ]);
+            return [
+                'sale' => $sale->fresh([
+                    'lines.lots',
+                    'lines.presentation',
+                    'lines.product',
+                    'payments',
+                    'returns.lines',
+                    'returns.payments',
+                    'station',
+                    'user',
+                    'customer',
+                ]),
+                'return_id' => (int) $saleReturn->id,
+            ];
         });
+
+        $freshSale = $sale['sale'];
+        $returnId = (int) $sale['return_id'];
+        $saleReturn = SaleReturn::with(['lines.saleLine.product', 'lines.saleLine.presentation', 'payments'])
+            ->find($returnId);
+
+        if ($saleReturn) {
+            $this->creditNotes->emitForReturn($freshSale, $saleReturn);
+        }
+
+        return $freshSale->fresh([
+            'lines.lots',
+            'lines.presentation',
+            'lines.product',
+            'payments',
+            'returns.lines',
+            'returns.payments',
+            'station',
+            'user',
+            'customer',
+        ]);
     }
 
     protected function restoreStockLifo(SaleLine $saleLine, float $qtyBaseReturn, SaleReturnLine $returnLine): float

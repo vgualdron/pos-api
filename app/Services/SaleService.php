@@ -9,6 +9,7 @@ use App\Models\Sale;
 use App\Models\SalePayment;
 use App\Models\Station;
 use App\Models\StockLot;
+use App\Services\Factus\FactusCreditNoteService;
 use App\Services\Factus\FactusInvoiceService;
 use App\Support\PlaceScope;
 use App\Support\PosStation;
@@ -21,6 +22,7 @@ class SaleService
 {
     public function __construct(
         protected FactusInvoiceService $factusInvoice,
+        protected FactusCreditNoteService $factusCreditNote,
         protected PosResolutionSettingService $posResolution
     ) {
     }
@@ -352,8 +354,10 @@ class SaleService
 
     public function cancel($user, int $saleId, ?string $reason = null): Sale
     {
-        return DB::transaction(function () use ($user, $saleId, $reason) {
-            $sale = Sale::with(['lines.lots'])->lockForUpdate()->findOrFail($saleId);
+        $sale = DB::transaction(function () use ($user, $saleId, $reason) {
+            $sale = Sale::with(['lines.lots', 'lines.product', 'lines.presentation', 'payments', 'customer', 'place'])
+                ->lockForUpdate()
+                ->findOrFail($saleId);
             PlaceScope::assert($user, (int) $sale->place_id, 'sales.allPlaces');
 
             if ($sale->status === Sale::STATUS_CANCELLED) {
@@ -391,8 +395,29 @@ class SaleService
                 'cancel_reason' => $reason ? trim($reason) : null,
             ]);
 
-            return $sale->fresh(['lines.lots', 'lines.presentation', 'lines.product', 'payments', 'station', 'user', 'customer']);
+            return $sale->fresh([
+                'lines.lots',
+                'lines.presentation',
+                'lines.product',
+                'payments',
+                'station',
+                'user',
+                'customer',
+                'place',
+            ]);
         });
+
+        $sale = $this->factusCreditNote->emitForCancel($sale, $reason);
+
+        return $sale->fresh([
+            'lines.lots',
+            'lines.presentation',
+            'lines.product',
+            'payments',
+            'station',
+            'user',
+            'customer',
+        ]);
     }
 
     protected function resolveCustomerId(int $placeId, $customerId): ?int

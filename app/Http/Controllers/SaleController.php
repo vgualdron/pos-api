@@ -106,8 +106,16 @@ class SaleController extends Controller
                 'reason' => 'nullable|string|max:255',
             ]);
             $sale = $this->service->cancel($request->user(), (int) $id, $data['reason'] ?? null);
+            $message = 'Venta anulada';
+            if (($sale->document_type ?? null) === Sale::DOCUMENT_ELECTRONIC_INVOICE && ! empty($sale->fe_number)) {
+                if (($sale->nc_status ?? null) === 'accepted' || ! empty($sale->nc_cude)) {
+                    $message = 'Venta anulada y nota crédito emitida';
+                } elseif (($sale->nc_status ?? null) === 'failed') {
+                    $message = 'Venta anulada, pero falló la nota crédito';
+                }
+            }
 
-            return response()->json(['message' => 'Venta anulada', 'data' => $sale]);
+            return response()->json(['message' => $message, 'data' => $sale]);
         } catch (Exception $e) {
             return response()->json(['error' => 'Error al anular la venta', 'message' => $e->getMessage()], 400);
         }
@@ -153,8 +161,20 @@ class SaleController extends Controller
             ]);
 
             $sale = $this->returnService->create($request->user(), (int) $id, $data);
+            $message = 'Devolución registrada';
+            if (($sale->document_type ?? null) === Sale::DOCUMENT_ELECTRONIC_INVOICE && ! empty($sale->fe_number)) {
+                $latestReturn = collect($sale->returns ?? [])->sortByDesc('id')->first();
+                $ncStatus = is_array($latestReturn)
+                    ? ($latestReturn['dian_status'] ?? null)
+                    : ($latestReturn->dian_status ?? null);
+                if ($ncStatus === 'accepted') {
+                    $message = 'Devolución registrada y nota crédito emitida';
+                } elseif ($ncStatus === 'failed') {
+                    $message = 'Devolución registrada, pero falló la nota crédito';
+                }
+            }
 
-            return response()->json(['message' => 'Devolución registrada', 'data' => $sale], 201);
+            return response()->json(['message' => $message, 'data' => $sale], 201);
         } catch (Exception $e) {
             return response()->json(['error' => 'Error al devolver', 'message' => $e->getMessage()], 400);
         }

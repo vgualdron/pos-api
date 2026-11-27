@@ -24,10 +24,18 @@ class SaleReturn extends Model
         'cost_total',
         'dian_credit_note_id',
         'dian_status',
+        'nc_reference_code',
+        'nc_number',
+        'nc_cude',
+        'nc_qr_url',
+        'nc_public_url',
+        'nc_error',
+        'nc_emitted_at',
     ];
 
     protected $casts = [
         'returned_at' => 'datetime',
+        'nc_emitted_at' => 'datetime',
         'subtotal' => 'float',
         'discount_amount' => 'float',
         'tax_base' => 'float',
