@@ -4,12 +4,14 @@ namespace App\Services;
 
 use App\Models\DiningTable;
 use App\Models\ProductPresentation;
+use App\Models\Station;
 use App\Models\TableOrder;
 use App\Models\TableOrderLine;
 use App\Support\SalePricing;
 use Carbon\Carbon;
 use Exception;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class TableOrderService
 {
@@ -52,7 +54,7 @@ class TableOrderService
         return TableOrder::query()
             ->where('dining_table_id', $diningTableId)
             ->where('status', TableOrder::STATUS_OPEN)
-            ->with('lines')
+            ->with(['lines.kitchenStation'])
             ->first();
     }
 
@@ -63,7 +65,7 @@ class TableOrderService
             $order = $this->openOrderForTable($diningTableId, $userId);
 
             $presentationId = (int) ($data['product_presentation_id'] ?? 0);
-            $presentation = ProductPresentation::with(['product', 'tax'])->find($presentationId);
+            $presentation = ProductPresentation::with(['product.kitchenStation', 'tax'])->find($presentationId);
             if (!$presentation || (int) $presentation->product?->place_id !== (int) $table->place_id) {
                 throw new Exception('La presentación no pertenece a esta sede.');
             }
@@ -96,10 +98,15 @@ class TableOrderService
             $factor = max(0.0001, (float) ($presentation->factor ?: 1));
             $maxSort = (int) $order->lines()->max('sort_order');
 
+            $kitchenStationId = $presentation->product?->kitchen_station_id
+                ? (int) $presentation->product->kitchen_station_id
+                : null;
+
             TableOrderLine::create([
                 'table_order_id' => $order->id,
                 'product_id' => $presentation->product_id,
                 'product_presentation_id' => $presentation->id,
+                'kitchen_station_id' => $kitchenStationId,
                 'product_name' => $presentation->product?->name ?: 'Producto',
                 'presentation_name' => $presentation->name,
                 'qty' => $qty,
@@ -119,9 +126,76 @@ class TableOrderService
             ]);
 
             $this->recomputeTotals($order->fresh('lines'));
+            $this->syncTableServiceState($table, $userId, false);
+
+            return $order->fresh(['lines.kitchenStation', 'diningTable.diningZone']);
+        });
+    }
+
+    /**
+     * Mark pending lines as sent and return print batches grouped by kitchen station IP.
+     *
+     * @return array{order: TableOrder, batches: array<int, array<string, mixed>>, invoice_printer_ip: ?string}
+     */
+    public function sendPending(int $diningTableId, ?int $userId = null): array
+    {
+        return DB::transaction(function () use ($diningTableId, $userId) {
+            $table = DiningTable::with('diningZone')->findOrFail($diningTableId);
+            $order = $this->getOpenOrderForTable($diningTableId);
+            if (! $order) {
+                throw new Exception('No hay comanda abierta en esta mesa.');
+            }
+
+            $pending = $order->lines()->whereNull('sent_at')->orderBy('sort_order')->orderBy('id')->get();
+            if ($pending->isEmpty()) {
+                throw new Exception('No hay productos pendientes por enviar.');
+            }
+
+            $batchId = (string) Str::uuid();
+            $now = Carbon::now();
+            foreach ($pending as $line) {
+                $line->update([
+                    'sent_at' => $now,
+                    'send_batch_id' => $batchId,
+                ]);
+            }
+
+            $order->update([
+                'last_sent_at' => $now,
+                'user_id' => $userId ?: $order->user_id,
+            ]);
+
             $this->syncTableServiceState($table, $userId, true);
 
-            return $order->fresh(['lines', 'diningTable.diningZone']);
+            $stationIds = $pending->pluck('kitchen_station_id')->filter()->unique()->values();
+            $stations = Station::query()->whereIn('id', $stationIds)->get()->keyBy('id');
+
+            $batches = [];
+            $grouped = $pending->groupBy(fn ($line) => $line->kitchen_station_id ?: 'none');
+            foreach ($grouped as $key => $lines) {
+                $station = $key === 'none' ? null : $stations->get((int) $key);
+                $batches[] = [
+                    'station_id' => $station?->id,
+                    'station_name' => $station?->name ?: 'Sin estación',
+                    'printer_ip' => $station?->printer_ip,
+                    'lines' => $lines->values()->map(fn ($line) => [
+                        'id' => $line->id,
+                        'product_name' => $line->product_name,
+                        'presentation_name' => $line->presentation_name,
+                        'qty' => (float) $line->qty,
+                        'notes' => $line->notes,
+                    ])->all(),
+                ];
+            }
+
+            $fresh = $order->fresh(['lines.kitchenStation', 'diningTable.diningZone']);
+
+            return [
+                'order' => $fresh,
+                'batches' => $batches,
+                'send_batch_id' => $batchId,
+                'invoice_printer_ip' => $table->diningZone?->invoice_printer_ip,
+            ];
         });
     }
 
@@ -158,7 +232,7 @@ class TableOrderService
 
             $this->recomputeTotals($order->fresh('lines'));
 
-            return $order->fresh(['lines', 'diningTable.diningZone']);
+            return $order->fresh(['lines.kitchenStation', 'diningTable.diningZone']);
         });
     }
 
@@ -170,6 +244,9 @@ class TableOrderService
             if (!$order || !$order->isOpen()) {
                 throw new Exception('La comanda no está abierta.');
             }
+            if ($line->sent_at) {
+                throw new Exception('No se puede quitar un producto ya enviado a cocina.');
+            }
 
             $line->delete();
             if ($userId) {
@@ -178,7 +255,7 @@ class TableOrderService
 
             $this->recomputeTotals($order->fresh('lines'));
 
-            return $order->fresh(['lines', 'diningTable.diningZone']);
+            return $order->fresh(['lines.kitchenStation', 'diningTable.diningZone']);
         });
     }
 

@@ -16,6 +16,7 @@ class DiningZone extends Model
         'place_id',
         'name',
         'sort_order',
+        'invoice_printer_ip',
         'status',
     ];
 

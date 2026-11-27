@@ -43,8 +43,11 @@ class StationService
     {
         try {
             return DB::transaction(function () use ($data) {
-                $station = $this->repo->create($this->normalizeStationPayload($data));
-                $this->provisionStationUser($station);
+                $payload = $this->normalizeStationPayload($data);
+                $station = $this->repo->create($payload);
+                if (($payload['type'] ?? Station::TYPE_REGISTER) === Station::TYPE_REGISTER) {
+                    $this->provisionStationUser($station);
+                }
 
                 return $station->fresh(['place', 'users']);
             });
@@ -57,8 +60,11 @@ class StationService
     {
         try {
             return DB::transaction(function () use ($id, $data) {
-                $station = $this->repo->update($id, $this->normalizeStationPayload($data));
-                $this->syncStationUser($station);
+                $payload = $this->normalizeStationPayload($data);
+                $station = $this->repo->update($id, $payload);
+                if (($station->type ?? Station::TYPE_REGISTER) === Station::TYPE_REGISTER) {
+                    $this->syncStationUser($station);
+                }
 
                 return $station->fresh(['place', 'users']);
             });
@@ -104,7 +110,20 @@ class StationService
 
     protected function normalizeStationPayload(array $data): array
     {
-        $data['type'] = Station::TYPE_REGISTER;
+        $type = strtolower(trim((string) ($data['type'] ?? Station::TYPE_REGISTER)));
+        if (! in_array($type, Station::TYPES, true)) {
+            throw new Exception('Tipo de estación inválido. Use register o kitchen.');
+        }
+        $data['type'] = $type;
+
+        if (array_key_exists('printer_ip', $data)) {
+            $ip = trim((string) ($data['printer_ip'] ?? ''));
+            $data['printer_ip'] = $ip !== '' ? $ip : null;
+        }
+
+        if ($type === Station::TYPE_KITCHEN && empty($data['printer_ip'])) {
+            // allow null on create if omitted; kitchen should ideally have IP
+        }
 
         return $data;
     }

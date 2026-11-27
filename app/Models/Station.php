@@ -10,8 +10,11 @@ class Station extends Model
 {
     public const TYPE_REGISTER = 'register';
 
+    public const TYPE_KITCHEN = 'kitchen';
+
     public const TYPES = [
         self::TYPE_REGISTER,
+        self::TYPE_KITCHEN,
     ];
 
     protected $fillable = [
@@ -20,6 +23,7 @@ class Station extends Model
         'code',
         'type',
         'status',
+        'printer_ip',
         'login_password',
     ];
 
@@ -29,11 +33,20 @@ class Station extends Model
 
     public function getLoginEmailAttribute(): ?string
     {
+        if (($this->type ?? self::TYPE_REGISTER) === self::TYPE_KITCHEN) {
+            return null;
+        }
+
         if ($this->relationLoaded('users')) {
             return $this->users->sortBy('id')->first()?->email;
         }
 
         return $this->users()->orderBy('id')->value('email');
+    }
+
+    public function isKitchen(): bool
+    {
+        return ($this->type ?? self::TYPE_REGISTER) === self::TYPE_KITCHEN;
     }
 
     public function place(): BelongsTo
@@ -44,5 +57,10 @@ class Station extends Model
     public function users(): HasMany
     {
         return $this->hasMany(User::class);
+    }
+
+    public function kitchenProducts(): HasMany
+    {
+        return $this->hasMany(Product::class, 'kitchen_station_id');
     }
 }

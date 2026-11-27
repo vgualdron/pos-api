@@ -45,6 +45,7 @@ class DiningZoneController extends Controller
                 'place_id' => 'required|integer|exists:places,id',
                 'name' => 'required|string|max:80',
                 'sort_order' => 'nullable|integer|min:0|max:9999',
+                'invoice_printer_ip' => 'nullable|string|max:45',
                 'status' => 'nullable|string|max:20',
             ]);
             PlaceScope::assert($request->user(), (int) $data['place_id'], 'dining-zones.allPlaces');
@@ -64,6 +65,7 @@ class DiningZoneController extends Controller
             $data = $request->validate([
                 'name' => 'sometimes|string|max:80',
                 'sort_order' => 'nullable|integer|min:0|max:9999',
+                'invoice_printer_ip' => 'nullable|string|max:45',
                 'status' => 'nullable|string|max:20',
             ]);
             $record = $this->service->update((int) $id, $data);

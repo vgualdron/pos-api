@@ -18,6 +18,7 @@ class StationController extends Controller
         'code',
         'type',
         'status',
+        'printer_ip',
     ];
 
     public function __construct(StationService $service)

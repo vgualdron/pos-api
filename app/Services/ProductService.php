@@ -7,6 +7,7 @@ use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Models\ProductPresentation;
 use App\Models\ProductRecipeItem;
+use App\Models\Station;
 use App\Models\StockLot;
 use Exception;
 use Illuminate\Support\Collection;
@@ -89,10 +90,14 @@ class ProductService
             if (array_key_exists('product_category_id', $data) && !$data['product_category_id']) {
                 $data['product_category_id'] = null;
             }
+            if (array_key_exists('kitchen_station_id', $data) && !$data['kitchen_station_id']) {
+                $data['kitchen_station_id'] = null;
+            }
 
             $data['inventory_mode'] = $this->normalizeInventoryMode($data['inventory_mode'] ?? null);
 
             $this->assertCategoryBelongsToPlace($data);
+            $this->assertKitchenStationBelongsToPlace($data);
 
             $product = Product::create($data);
             $this->syncPresentations($product, $presentations);
@@ -146,15 +151,20 @@ class ProductService
             if (array_key_exists('product_category_id', $data) && !$data['product_category_id']) {
                 $data['product_category_id'] = null;
             }
+            if (array_key_exists('kitchen_station_id', $data) && !$data['kitchen_station_id']) {
+                $data['kitchen_station_id'] = null;
+            }
 
             if (array_key_exists('inventory_mode', $data)) {
                 $data['inventory_mode'] = $this->normalizeInventoryMode($data['inventory_mode']);
             }
 
-            $this->assertCategoryBelongsToPlace([
+            $placeScoped = [
                 ...$data,
                 'place_id' => $data['place_id'] ?? $product->place_id,
-            ]);
+            ];
+            $this->assertCategoryBelongsToPlace($placeScoped);
+            $this->assertKitchenStationBelongsToPlace($placeScoped);
 
             $product->update($data);
             $product->refresh();
@@ -414,6 +424,26 @@ class ProductService
         $placeId = (int) ($data['place_id'] ?? 0);
         if ($placeId && (int) $category->place_id !== $placeId) {
             throw new Exception('La categoría no pertenece a esta sede.');
+        }
+    }
+
+    protected function assertKitchenStationBelongsToPlace(array $data): void
+    {
+        if (! array_key_exists('kitchen_station_id', $data) || $data['kitchen_station_id'] === null) {
+            return;
+        }
+
+        $station = Station::find((int) $data['kitchen_station_id']);
+        if (! $station) {
+            throw new Exception('La estación de cocina no existe.');
+        }
+        if (($station->type ?? Station::TYPE_REGISTER) !== Station::TYPE_KITCHEN) {
+            throw new Exception('La estación asignada debe ser de tipo cocina.');
+        }
+
+        $placeId = (int) ($data['place_id'] ?? 0);
+        if ($placeId && (int) $station->place_id !== $placeId) {
+            throw new Exception('La estación de cocina no pertenece a esta sede.');
         }
     }
 

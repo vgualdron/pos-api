@@ -42,6 +42,7 @@ class DiningZoneService
             'place_id' => $placeId,
             'name' => $name,
             'sort_order' => (int) ($data['sort_order'] ?? 0),
+            'invoice_printer_ip' => $this->normalizeIp($data['invoice_printer_ip'] ?? null),
             'status' => ($data['status'] ?? DiningZone::STATUS_ACTIVE) === DiningZone::STATUS_INACTIVE
                 ? DiningZone::STATUS_INACTIVE
                 : DiningZone::STATUS_ACTIVE,
@@ -77,6 +78,10 @@ class DiningZoneService
             $data['sort_order'] = (int) $data['sort_order'];
         }
 
+        if (array_key_exists('invoice_printer_ip', $data)) {
+            $data['invoice_printer_ip'] = $this->normalizeIp($data['invoice_printer_ip']);
+        }
+
         $zone->update($data);
 
         return $zone->fresh();
@@ -89,5 +94,12 @@ class DiningZoneService
             throw new Exception('No se puede eliminar una zona con mesas. Reasigne las mesas o márquela inactiva.');
         }
         $zone->delete();
+    }
+
+    protected function normalizeIp(mixed $value): ?string
+    {
+        $ip = trim((string) ($value ?? ''));
+
+        return $ip !== '' ? $ip : null;
     }
 }

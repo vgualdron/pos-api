@@ -15,6 +15,7 @@ class Product extends Model
     protected $fillable = [
         'place_id',
         'product_category_id',
+        'kitchen_station_id',
         'name',
         'sku',
         'barcode',
@@ -24,7 +25,7 @@ class Product extends Model
         'status',
     ];
 
-    protected $with = ['presentations', 'category', 'recipeItems.ingredient'];
+    protected $with = ['presentations', 'category', 'kitchenStation', 'recipeItems.ingredient'];
 
     protected $appends = ['stock_on_hand'];
 
@@ -45,6 +46,11 @@ class Product extends Model
     public function category(): BelongsTo
     {
         return $this->belongsTo(ProductCategory::class, 'product_category_id');
+    }
+
+    public function kitchenStation(): BelongsTo
+    {
+        return $this->belongsTo(Station::class, 'kitchen_station_id');
     }
 
     public function presentations(): HasMany

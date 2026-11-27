@@ -53,6 +53,7 @@ class ProductController extends Controller
             $data = $request->validate([
                 'place_id' => 'required|integer|exists:places,id',
                 'product_category_id' => 'nullable|integer|exists:product_categories,id',
+                'kitchen_station_id' => 'nullable|integer|exists:stations,id',
                 'name' => 'required|string|max:255',
                 'sku' => 'nullable|string|max:80',
                 'barcode' => 'nullable|string|max:80',
@@ -95,6 +96,7 @@ class ProductController extends Controller
             $data = $request->validate([
                 'place_id' => 'sometimes|integer|exists:places,id',
                 'product_category_id' => 'nullable|integer|exists:product_categories,id',
+                'kitchen_station_id' => 'nullable|integer|exists:stations,id',
                 'name' => 'sometimes|string|max:255',
                 'sku' => 'nullable|string|max:80',
                 'barcode' => 'nullable|string|max:80',

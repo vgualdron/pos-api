@@ -11,6 +11,7 @@ class TableOrderLine extends Model
         'table_order_id',
         'product_id',
         'product_presentation_id',
+        'kitchen_station_id',
         'product_name',
         'presentation_name',
         'qty',
@@ -26,6 +27,8 @@ class TableOrderLine extends Model
         'tax_amount',
         'line_total',
         'notes',
+        'sent_at',
+        'send_batch_id',
         'sort_order',
     ];
 
@@ -39,6 +42,7 @@ class TableOrderLine extends Model
         'line_base' => 'float',
         'tax_amount' => 'float',
         'line_total' => 'float',
+        'sent_at' => 'datetime',
         'sort_order' => 'integer',
     ];
 
@@ -57,8 +61,18 @@ class TableOrderLine extends Model
         return $this->belongsTo(ProductPresentation::class, 'product_presentation_id');
     }
 
+    public function kitchenStation(): BelongsTo
+    {
+        return $this->belongsTo(Station::class, 'kitchen_station_id');
+    }
+
     public function tax(): BelongsTo
     {
         return $this->belongsTo(Tax::class);
+    }
+
+    public function isSent(): bool
+    {
+        return $this->sent_at !== null;
     }
 }

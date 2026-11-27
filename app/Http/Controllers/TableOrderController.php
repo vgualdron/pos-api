@@ -100,4 +100,23 @@ class TableOrderController extends Controller
             return response()->json(['error' => 'Error al quitar producto', 'message' => $e->getMessage()], 400);
         }
     }
+
+    public function send(Request $request, $diningTableId): JsonResponse
+    {
+        try {
+            $table = DiningTable::findOrFail((int) $diningTableId);
+            PlaceScope::assert($request->user(), (int) $table->place_id, 'dining-tables.allPlaces');
+            $result = $this->service->sendPending((int) $diningTableId, $request->user()?->id);
+
+            return response()->json([
+                'message' => 'Pedido enviado a cocina',
+                'data' => $result['order'],
+                'batches' => $result['batches'],
+                'send_batch_id' => $result['send_batch_id'],
+                'invoice_printer_ip' => $result['invoice_printer_ip'],
+            ]);
+        } catch (Exception $e) {
+            return response()->json(['error' => 'Error al enviar pedido', 'message' => $e->getMessage()], 400);
+        }
+    }
 }

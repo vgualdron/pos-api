@@ -20,6 +20,7 @@ class TableOrder extends Model
         'user_id',
         'status',
         'opened_at',
+        'last_sent_at',
         'closed_at',
         'subtotal',
         'discount_amount',
@@ -32,6 +33,7 @@ class TableOrder extends Model
 
     protected $casts = [
         'opened_at' => 'datetime',
+        'last_sent_at' => 'datetime',
         'closed_at' => 'datetime',
         'subtotal' => 'float',
         'discount_amount' => 'float',
